@@ -49,6 +49,11 @@ import TagGroupListPage from '@/views/mobile/tags/GroupListPage.vue';
 
 import TemplateListPage from '@/views/mobile/templates/ListPage.vue';
 
+import ItemDefListPage from '@/views/mobile/items/ListPage.vue';
+import ItemDefEditPage from '@/views/mobile/items/EditPage.vue';
+import InventoryListPage from '@/views/mobile/inventory/ListPage.vue';
+import InventoryEditPage from '@/views/mobile/inventory/EditPage.vue';
+
 function asyncResolve(component: unknown): (ctx: Router.RouteCallbackCtx) => void {
     return function({ resolve }: { resolve: ({ component }: { component: unknown }) => void }): void {
         return resolve({
@@ -354,6 +359,36 @@ const routes: Router.RouteParameters[] = [
     {
         path: '/template/edit',
         async: asyncResolve(TransactionEditPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/item/definitions',
+        async: asyncResolve(ItemDefListPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/item/definition/add',
+        async: asyncResolve(ItemDefEditPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/item/definition/edit',
+        async: asyncResolve(ItemDefEditPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/inventory/records',
+        async: asyncResolve(InventoryListPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/inventory/record/add',
+        async: asyncResolve(InventoryEditPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/inventory/record/edit',
+        async: asyncResolve(InventoryEditPage),
         beforeEnter: [checkLogin]
     },
     {

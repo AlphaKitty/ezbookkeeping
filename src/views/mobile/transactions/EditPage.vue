@@ -63,12 +63,13 @@
             <f7-list-item
                 class="transaction-edit-amount"
                 link="#" no-chevron
-                :class="sourceAmountClass"
+                :class="[sourceAmountClass, { 'disabled': isInventoryAmountLocked }]"
                 :header="sourceAmountTitle"
                 :title="getDisplayAmount(transaction.sourceAmount, transaction.hideAmount, sourceAccountCurrency)"
-                @click="showSourceAmountSheet = true"
+                @click="!isInventoryAmountLocked && (showSourceAmountSheet = true)"
             >
-                <number-pad-sheet :min-value="TRANSACTION_MIN_AMOUNT"
+                <number-pad-sheet v-if="!isInventoryAmountLocked"
+                                  :min-value="TRANSACTION_MIN_AMOUNT"
                                   :max-value="TRANSACTION_MAX_AMOUNT"
                                   :currency="sourceAccountCurrency"
                                   v-model:show="showSourceAmountSheet"
@@ -188,6 +189,106 @@
                                            v-model="transaction.transferCategoryId">
                 </tree-view-selection-sheet>
             </f7-list-item>
+
+            <!-- Inventory Linking -->
+            <f7-list-item
+                v-if="transaction.type === TransactionType.Expense || transaction.type === TransactionType.Income"
+                :class="{ 'readonly': mode === TransactionEditPageMode.View }"
+                :header="tt('Link Inventory')"
+                @click="onLinkInventoryToggle(!linkInventory)"
+            >
+                <template #after>
+                    <f7-toggle :checked="linkInventory" :disabled="mode === TransactionEditPageMode.View"
+                               @toggle:change="onLinkInventoryToggle" />
+                </template>
+            </f7-list-item>
+
+            <template v-if="linkInventory && (transaction.type === TransactionType.Expense || transaction.type === TransactionType.Income)">
+                <f7-list-item
+                    class="list-item-with-header-and-title list-item-title-hide-overflow"
+                    link="#" no-chevron
+                    :class="{ 'readonly': mode === TransactionEditPageMode.View }"
+                    :header="tt('Inventory Record')"
+                    :title="selectedInventoryRecordName || tt('Optional')"
+                    @click="showInventoryRecordPopup = true"
+                >
+                    <list-item-selection-popup value-type="item"
+                                               key-field="id" value-field="id"
+                                               title-field="name"
+                                               :title="tt('Inventory Record')"
+                                               :enable-filter="true"
+                                               :filter-placeholder="tt('Find record')"
+                                               :filter-no-items-text="tt('No results')"
+                                               :items="inventoryRecordOptions"
+                                               :model-value="selectedInventoryRecordId"
+                                               v-model:show="showInventoryRecordPopup"
+                                               @update:model-value="onInventoryRecordSelect">
+                    </list-item-selection-popup>
+                </f7-list-item>
+
+                <f7-list-item v-if="currentInventoryItemDef"
+                              :title="currentInventoryItemDef.name"
+                              :header="tt('Item Type')"
+                              :class="{ 'readonly': mode === TransactionEditPageMode.View }">
+                </f7-list-item>
+
+                <f7-list-item v-if="isInventoryAmountLocked" class="text-color-gray">
+                    <template #title>
+                        <f7-block class="no-padding no-margin">
+                            <span class="text-color-gray" style="font-size: 14px">{{ tt('inventoryAmountAutoCalculated') }}</span>
+                        </f7-block>
+                    </template>
+                </f7-list-item>
+
+                <template v-for="field in (currentInventoryItemDef?.fieldSchema?.fields || [])" :key="field.key">
+                    <f7-list-input v-if="field.fieldType === 'number'"
+                                   type="number"
+                                   :label="field.key"
+                                   :placeholder="field.key"
+                                   :suffix="field.unit"
+                                   :class="{ 'readonly': mode === TransactionEditPageMode.View || !field.editable }"
+                                   :readonly="mode === TransactionEditPageMode.View || !field.editable"
+                                   clear-button
+                                   v-model:value="inventoryFieldValues[field.key]" />
+
+                    <f7-list-input v-else-if="field.fieldType === 'text'"
+                                   type="text"
+                                   :label="field.key"
+                                   :placeholder="field.key"
+                                   :class="{ 'readonly': mode === TransactionEditPageMode.View || !field.editable }"
+                                   :readonly="mode === TransactionEditPageMode.View || !field.editable"
+                                   clear-button
+                                   v-model:value="inventoryFieldValues[field.key]" />
+
+                    <f7-list-item v-else-if="field.fieldType === 'enum'"
+                                  :title="field.key"
+                                  :class="{ 'readonly': mode === TransactionEditPageMode.View || !field.editable }"
+                                  :after="inventoryFieldValues[field.key] || tt('Optional')"
+                                  link="#" @click="openInventoryEnumSheet(field)" />
+
+                    <f7-list-input v-else-if="field.fieldType === 'date'"
+                                   :type="field.format === 'YYYY-MM-DD HH:mm:ss' ? 'datetime-local' : 'date'"
+                                   :label="field.key"
+                                   :placeholder="field.key"
+                                   :class="{ 'readonly': mode === TransactionEditPageMode.View || !field.editable }"
+                                   :readonly="mode === TransactionEditPageMode.View || !field.editable"
+                                   clear-button
+                                   v-model:value="inventoryFieldValues[field.key]" />
+                </template>
+
+                <f7-list-item v-if="!currentInventoryItemDef?.fieldSchema?.fields?.length && inventoryItemDefId"
+                              :title="tt('This item type has no custom fields defined')"
+                              :class="{ 'readonly': mode === TransactionEditPageMode.View }">
+                </f7-list-item>
+
+                <f7-list-item v-if="inventoryFormError" class="text-color-red">
+                    <template #title>
+                        <f7-block class="no-padding no-margin">
+                            <span class="text-color-red" style="font-size: 14px">{{ inventoryFormError }}</span>
+                        </f7-block>
+                    </template>
+                </f7-list-item>
+            </template>
 
             <f7-list-item
                 class="list-item-with-header-and-title"
@@ -473,6 +574,21 @@
             </f7-actions-group>
         </f7-actions>
 
+        <!-- Inventory Enum Selection Sheet -->
+        <f7-actions close-by-outside-click close-on-escape :opened="showInventoryEnumSheet" @actions:closed="showInventoryEnumSheet = false">
+            <f7-actions-group>
+                <f7-actions-label>{{ currentEnumField?.key || '' }}</f7-actions-label>
+                <f7-actions-button v-for="opt in (currentEnumField?.options || [])" :key="opt"
+                                   :bold="inventoryFieldValues[currentEnumField?.key || ''] === opt"
+                                   @click="onInventoryEnumSelect(opt)">
+                    {{ opt }}
+                </f7-actions-button>
+            </f7-actions-group>
+            <f7-actions-group>
+                <f7-actions-button bold close>{{ tt('Cancel') }}</f7-actions-button>
+            </f7-actions-group>
+        </f7-actions>
+
         <template #fixed v-if="quickSaveButtonStyleType === TransactionQuickSaveButtonStyle.BottomLeftFloating.type || quickSaveButtonStyleType === TransactionQuickSaveButtonStyle.BottomCenterFloating.type || quickSaveButtonStyleType === TransactionQuickSaveButtonStyle.BottomRightFloating.type">
             <f7-fab id="quick-save-button" :class="{ 'disabled': inputIsEmpty || submitting }" :position="quickSaveButtonFloatingPosition"
                     :text="tt(quickSaveButtonTitle)"
@@ -509,7 +625,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, useTemplateRef, watch } from 'vue';
 import type { PhotoBrowser, Router } from 'framework7/types';
 
 import { useI18n } from '@/locales/helpers.ts';
@@ -546,6 +662,10 @@ import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
 import { TransactionTemplate } from '@/models/transaction_template.ts';
 import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
 import { Transaction } from '@/models/transaction.ts';
+import type { InventoryRecordInfoResponse } from '@/models/inventory_record.ts';
+import type { ItemDefinitionInfoResponse, ItemField } from '@/models/item_definition.ts';
+
+import api from '@/lib/services.ts';
 
 import {
     getTimezoneOffset,
@@ -557,6 +677,7 @@ import { generateRandomUUID } from '@/lib/misc.ts';
 import { getTransactionPrimaryCategoryName, getTransactionSecondaryCategoryName } from '@/lib/category.ts';
 import { type SetTransactionOptions } from '@/lib/transaction.ts';
 import { getMapProvider, isTransactionPicturesEnabled } from '@/lib/server_settings.ts';
+import { evaluateExpressionToAmount } from '@/lib/evaluator.ts';
 import logger from '@/lib/logger.ts';
 
 const props = defineProps<{
@@ -666,6 +787,21 @@ const showTransactionTagSheet = ref<boolean>(false);
 const showTransactionPictures = ref<boolean>(pageTypeAndMode?.type === TransactionEditPageType.Transaction
     && (pageTypeAndMode?.mode === TransactionEditPageMode.Add || pageTypeAndMode?.mode === TransactionEditPageMode.Edit)
     && settingsStore.appSettings.alwaysShowTransactionPicturesInMobileTransactionEditPage);
+
+// Inventory linking state
+const linkInventory = ref(false);
+const inventoryItemDefId = ref('');
+const inventoryFieldValues = ref<Record<string, any>>({});
+const inventoryItemDefs = ref<ItemDefinitionInfoResponse[]>([]);
+const currentInventoryItemDef = ref<ItemDefinitionInfoResponse | null>(null);
+const inventoryFormError = ref('');
+const inventoryItemDefsLoaded = ref(false);
+const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
+const selectedInventoryRecordId = ref('');
+const inventoryRecordsLoaded = ref(false);
+const showInventoryRecordPopup = ref(false);
+const showInventoryEnumSheet = ref(false);
+const currentEnumField = ref<ItemField | null>(null);
 
 const quickSaveButtonStyleType = computed<number>(() => settingsStore.appSettings.quickSaveButtonStyleInMobileTransactionListPage);
 const quickSaveButtonFloatingPosition = computed<string>(() => {
@@ -844,6 +980,37 @@ const transactionDisplayScheduledEndDate = computed<string>(() => {
     }
 });
 
+const inventoryRecordOptions = computed(() => {
+    const sorted = [...inventoryRecords.value].sort((a, b) => b.createdUnixTime - a.createdUnixTime);
+    return sorted.map(r => {
+        const def = inventoryItemDefs.value.find(d => d.id === r.itemDefinitionId);
+        const namingFields = def?.fieldSchema?.fields?.filter(f => f.participateInNaming) || [];
+        const namingParts: string[] = [];
+        if (r.fieldValues?.values) {
+            for (const f of namingFields) {
+                const val = r.fieldValues.values[f.key];
+                if (val !== null && val !== undefined && val !== '') {
+                    namingParts.push(String(val));
+                }
+            }
+        }
+        const displayName = r.itemDefinitionName
+            ? (namingParts.length ? `${r.itemDefinitionName} - ${namingParts.join(' - ')}` : r.itemDefinitionName)
+            : `#${r.id}`;
+        return { id: r.id, name: displayName };
+    });
+});
+
+const selectedInventoryRecordName = computed(() => {
+    if (!selectedInventoryRecordId.value) return '';
+    const opt = inventoryRecordOptions.value.find(o => o.id === selectedInventoryRecordId.value);
+    return opt?.name || '';
+});
+
+const isInventoryAmountLocked = computed(() =>
+    linkInventory.value && !!currentInventoryItemDef.value?.pricingExpr
+);
+
 function getPageTypeNameMode(): { type: TransactionEditPageType, mode: TransactionEditPageMode } | null {
     if (props.f7route.path === '/transaction/add') {
         return {
@@ -885,6 +1052,149 @@ function getFontClassByAmount(amount: number): string {
     }
 }
 
+// Inventory linking functions
+async function loadInventoryItemDefs() {
+    if (inventoryItemDefsLoaded.value) return;
+    const resp = await api.getItemDefinitions();
+    inventoryItemDefs.value = resp.data.result;
+    inventoryItemDefsLoaded.value = true;
+}
+
+async function loadInventoryRecords() {
+    if (inventoryRecordsLoaded.value) return;
+    try {
+        const resp = await api.getInventoryRecords();
+        inventoryRecords.value = resp.data.result;
+        inventoryRecordsLoaded.value = true;
+    } catch (error: any) {
+        logger.warn('failed to load inventory records', error);
+    }
+}
+
+function onLinkInventoryToggle(enabled: boolean) {
+    if (enabled) {
+        loadInventoryItemDefs();
+        loadInventoryRecords();
+    } else {
+        inventoryItemDefId.value = '';
+        currentInventoryItemDef.value = null;
+        inventoryFieldValues.value = {};
+        inventoryFormError.value = '';
+        selectedInventoryRecordId.value = '';
+        transaction.value.inventoryRecordId = undefined;
+        transaction.value.inventoryAction = undefined;
+    }
+}
+
+async function onInventoryRecordSelect(recordId: string) {
+    inventoryFormError.value = '';
+    if (!recordId) return;
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return;
+    try {
+        await loadInventoryItemDefs();
+        inventoryItemDefId.value = record.itemDefinitionId;
+        const defResp = await api.getItemDefinition({ id: record.itemDefinitionId });
+        currentInventoryItemDef.value = defResp.data.result;
+        const def = currentInventoryItemDef.value;
+        if (def.incomeCategoryId && def.incomeCategoryId !== '0') {
+            transaction.value.incomeCategoryId = def.incomeCategoryId;
+        }
+        if (def.expenseCategoryId && def.expenseCategoryId !== '0') {
+            transaction.value.expenseCategoryId = def.expenseCategoryId;
+        }
+        if (record.fieldValues?.values) {
+            inventoryFieldValues.value = { ...record.fieldValues.values };
+        } else {
+            inventoryFieldValues.value = {};
+        }
+        recalcInventoryAmount();
+    } catch (error: any) {
+        logger.warn('failed to load inventory record detail', error);
+        inventoryFormError.value = tt('Failed to load inventory record details');
+    }
+}
+
+async function loadInventoryDataForExistingTransaction(inventoryRecordId: string) {
+    try {
+        await loadInventoryItemDefs();
+        await loadInventoryRecords();
+        const invResp = await api.getInventoryRecord({ id: inventoryRecordId });
+        const invRecord = invResp.data.result;
+        inventoryItemDefId.value = invRecord.itemDefinitionId;
+        selectedInventoryRecordId.value = invRecord.id;
+        const defResp = await api.getItemDefinition({ id: invRecord.itemDefinitionId });
+        currentInventoryItemDef.value = defResp.data.result;
+        const def = currentInventoryItemDef.value;
+        if (def.incomeCategoryId && def.incomeCategoryId !== '0') {
+            transaction.value.incomeCategoryId = def.incomeCategoryId;
+        }
+        if (def.expenseCategoryId && def.expenseCategoryId !== '0') {
+            transaction.value.expenseCategoryId = def.expenseCategoryId;
+        }
+        if (invRecord.fieldValues?.values) {
+            inventoryFieldValues.value = { ...invRecord.fieldValues.values };
+        }
+        linkInventory.value = true;
+        recalcInventoryAmount();
+    } catch (error: any) {
+        logger.warn('failed to load inventory data for existing transaction', error);
+    }
+}
+
+function recalcInventoryAmount() {
+    const expr = currentInventoryItemDef.value?.pricingExpr;
+    if (!expr) return;
+
+    let substituted = expr;
+    for (const field of currentInventoryItemDef.value?.fieldSchema?.fields || []) {
+        const val = inventoryFieldValues.value[field.key];
+        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
+            return;
+        }
+        substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
+    }
+
+    const amount = evaluateExpressionToAmount(substituted);
+    if (amount !== undefined) {
+        transaction.value.sourceAmount = amount;
+    }
+}
+
+function validateInventoryFields(): string | null {
+    if (!currentInventoryItemDef.value?.fieldSchema?.fields?.length) return null;
+    for (const field of currentInventoryItemDef.value.fieldSchema.fields) {
+        if (!field.required) continue;
+        const v = inventoryFieldValues.value[field.key];
+        if (v === null || v === undefined || v === '') return `${tt('Required')}: ${field.key}`;
+        if (typeof v === 'number' && isNaN(v)) return `${tt('Required')}: ${field.key}`;
+    }
+    return null;
+}
+
+function resetInventoryState() {
+    linkInventory.value = false;
+    inventoryItemDefId.value = '';
+    currentInventoryItemDef.value = null;
+    inventoryFieldValues.value = {};
+    inventoryFormError.value = '';
+    selectedInventoryRecordId.value = '';
+    transaction.value.inventoryRecordId = undefined;
+    transaction.value.inventoryAction = undefined;
+}
+
+function openInventoryEnumSheet(field: ItemField) {
+    currentEnumField.value = field;
+    showInventoryEnumSheet.value = true;
+}
+
+function onInventoryEnumSelect(value: string) {
+    if (currentEnumField.value) {
+        inventoryFieldValues.value[currentEnumField.value.key] = value;
+    }
+    showInventoryEnumSheet.value = false;
+}
+
 function getQueryTransactionOptions(): SetTransactionOptions {
     return {
         time: query['time'] ? parseInt(query['time']) : undefined,
@@ -898,6 +1208,16 @@ function getQueryTransactionOptions(): SetTransactionOptions {
         comment: query['comment']
     };
 }
+
+watch(inventoryFieldValues, () => {
+    recalcInventoryAmount();
+}, { deep: true });
+
+watch(() => transaction.value.type, (newType) => {
+    if (linkInventory.value && (newType === TransactionType.Transfer || newType === TransactionType.ModifyBalance)) {
+        resetInventoryState();
+    }
+});
 
 function init(): void {
     if (!pageTypeAndMode) {
@@ -1014,6 +1334,10 @@ function init(): void {
             if (fromTransaction && query['withGeoLocation'] && query['withGeoLocation'] === 'true') {
                 transaction.value.setGeoLocation(fromTransaction.geoLocation);
             }
+
+            if (fromTransaction && fromTransaction.inventoryRecordId) {
+                loadInventoryDataForExistingTransaction(fromTransaction.inventoryRecordId);
+            }
         } else if (pageTypeAndMode.type === TransactionEditPageType.Template && query['id'] && responses[4] instanceof TransactionTemplate) {
             const template = responses[4];
             transaction.value.id = template.id;
@@ -1075,6 +1399,7 @@ function save(afterAction: AfterSaveAction): void {
                     showToast('You have added a new transaction');
                     updateTransactionModelByAfterSaveAction(afterAction, getQueryTransactionOptions());
                     clientSessionId.value = generateRandomUUID();
+                    resetInventoryState();
                 } else {
                     if (mode.value === TransactionEditPageMode.Add) {
                         showToast('You have added a new transaction');
@@ -1115,13 +1440,56 @@ function save(afterAction: AfterSaveAction): void {
             });
         };
 
-        if (transaction.value.sourceAmount === 0) {
-            showConfirm('Are you sure you want to save this transaction with a zero amount?', () => {
+        const saveWithOptionalInventory = async function () {
+            if (linkInventory.value && mode.value === TransactionEditPageMode.Add) {
+                const invErr = validateInventoryFields();
+                if (invErr) {
+                    inventoryFormError.value = invErr;
+                    return;
+                }
+
+                submitting.value = true;
+                showLoading(() => submitting.value);
+                try {
+                    const fieldValuesPayload = currentInventoryItemDef.value?.fieldSchema?.fields?.length
+                        ? { values: { ...inventoryFieldValues.value } }
+                        : null;
+                    const inventoryAction = transaction.value.type === TransactionType.Expense ? 'stock_in' : 'stock_out';
+                    const resp = await api.addInventoryRecord({
+                        itemDefinitionId: inventoryItemDefId.value,
+                        warehouseId: '0',
+                        fieldValues: fieldValuesPayload,
+                        quantity: 0,
+                        unit: '',
+                        unitPrice: 0,
+                        transporter: '',
+                        batchNo: '',
+                        comment: '',
+                    });
+                    transaction.value.inventoryRecordId = resp.data.result.id;
+                    transaction.value.inventoryAction = inventoryAction;
+                    submitting.value = false;
+                    hideLoading();
+                } catch (error: any) {
+                    submitting.value = false;
+                    hideLoading();
+                    if (!error.processed) {
+                        showToast(error.message || error);
+                    }
+                    return;
+                }
+            }
+
+            if (transaction.value.sourceAmount === 0) {
+                showConfirm('Are you sure you want to save this transaction with a zero amount?', () => {
+                    doSubmit();
+                });
+            } else {
                 doSubmit();
-            });
-        } else {
-            doSubmit();
-        }
+            }
+        };
+
+        saveWithOptionalInventory();
     } else if (pageTypeAndMode?.type === TransactionEditPageType.Template && (mode.value === TransactionEditPageMode.Add || mode.value === TransactionEditPageMode.Edit)) {
         submitting.value = true;
         showLoading(() => submitting.value);

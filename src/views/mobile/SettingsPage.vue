@@ -8,6 +8,8 @@
             <f7-list-item :title="tt('Transaction Categories')" link="/category/all"></f7-list-item>
             <f7-list-item :title="tt('Transaction Tags')" link="/tag/list"></f7-list-item>
             <f7-list-item :title="tt('Transaction Templates')" link="/template/list"></f7-list-item>
+            <f7-list-item :title="tt('Item Definitions')" link="/item/definitions"></f7-list-item>
+            <f7-list-item :title="tt('Inventory Records')" link="/inventory/records"></f7-list-item>
             <f7-list-item :title="tt('Scheduled Transactions')" link="/schedule/list" v-if="isUserScheduledTransactionEnabled()"></f7-list-item>
             <f7-list-item :title="tt('Data Management')" link="/user/data/management"></f7-list-item>
             <f7-list-item :title="tt('Two-Factor Authentication')" link="/user/2fa"></f7-list-item>
