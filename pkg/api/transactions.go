@@ -1140,6 +1140,8 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionCreateHandler] user \"uid:%d\" has created a new transaction \"id:%d\" successfully", uid, transaction.TransactionId)
 
+	a.updateInventoryAfterTransactionCreate(c, uid, transaction)
+
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
 	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
@@ -2093,6 +2095,9 @@ func (a *TransactionsApi) TransactionDeleteHandler(c *core.WebContext) (any, *er
 	}
 
 	log.Infof(c, "[transactions.TransactionDeleteHandler] user \"uid:%d\" has deleted transaction \"id:%d\"", uid, transactionDeleteReq.Id)
+
+	a.reverseInventoryAfterTransactionDelete(c, uid, transaction)
+
 	return true, nil
 }
 
@@ -2942,6 +2947,8 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 		HideAmount:        transactionCreateReq.HideAmount,
 		Comment:           transactionCreateReq.Comment,
 		CreatedIp:         clientIp,
+		InventoryRecordId: transactionCreateReq.InventoryRecordId,
+		InventoryAction:   transactionCreateReq.InventoryAction,
 	}
 
 	if transactionCreateReq.Type == models.TRANSACTION_TYPE_TRANSFER {
@@ -2955,4 +2962,51 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 	}
 
 	return transaction
+	}
+
+func (a *TransactionsApi) updateInventoryAfterTransactionCreate(c core.Context, uid int64, transaction *models.Transaction) {
+	if transaction.InventoryRecordId <= 0 || transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
+		return
+	}
+
+	delta := transaction.Amount
+	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
+		delta = -delta
+	}
+
+	newStatus := models.INVENTORY_STATUS_IN_STOCK
+	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
+		newStatus = models.INVENTORY_STATUS_SOLD_OUT
+	}
+
+	sess := services.InventoryRecords.UserDataDB(uid).NewSession(c)
+	defer sess.Close()
+
+	err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, transaction.InventoryRecordId, float64(delta), newStatus, sess)
+	if err != nil {
+		log.Errorf(c, "[transactions.updateInventoryAfterTransactionCreate] failed to update inventory record \"id:%d\" for transaction \"id:%d\", because %s",
+			transaction.InventoryRecordId, transaction.TransactionId, err.Error())
+	}
+}
+
+func (a *TransactionsApi) reverseInventoryAfterTransactionDelete(c core.Context, uid int64, transaction *models.Transaction) {
+	if transaction.InventoryRecordId <= 0 || transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
+		return
+	}
+
+	delta := -transaction.Amount
+	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
+		delta = transaction.Amount
+	}
+
+	newStatus := models.INVENTORY_STATUS_IN_STOCK
+
+	sess := services.InventoryRecords.UserDataDB(uid).NewSession(c)
+	defer sess.Close()
+
+	err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, transaction.InventoryRecordId, float64(delta), newStatus, sess)
+	if err != nil {
+		log.Errorf(c, "[transactions.reverseInventoryAfterTransactionDelete] failed to reverse inventory record \"id:%d\" for transaction \"id:%d\", because %s",
+			transaction.InventoryRecordId, transaction.TransactionId, err.Error())
+	}
 }

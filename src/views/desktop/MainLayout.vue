@@ -87,6 +87,23 @@
                 </li>
                 <li class="nav-section-title">
                     <div class="title-wrapper">
+                        <span class="title-text">{{ tt('Inventory') }}</span>
+                    </div>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/item/definitions">
+                        <v-icon class="nav-item-icon" :icon="mdiPackageVariant"/>
+                        <span class="nav-item-title">{{ tt('Item Definitions') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/inventory/records">
+                        <v-icon class="nav-item-icon" :icon="mdiWarehouse"/>
+                        <span class="nav-item-title">{{ tt('Inventory Records') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-section-title">
+                    <div class="title-wrapper">
                         <span class="title-text">{{ tt('Miscellaneous') }}</span>
                     </div>
                 </li>
@@ -236,6 +253,8 @@ import {
     mdiTagOutline,
     mdiClipboardTextOutline,
     mdiClipboardTextClockOutline,
+    mdiPackageVariant,
+    mdiWarehouse,
     mdiChartPieOutline,
     mdiCompassOutline,
     mdiSwapHorizontal,

@@ -179,6 +179,18 @@ import type {
 import type {
     RecognizedReceiptImageResponse
 } from '@/models/large_language_model.ts';
+import type {
+    ItemDefinitionCreateRequest,
+    ItemDefinitionModifyRequest,
+    ItemDefinitionDeleteRequest,
+    ItemDefinitionInfoResponse
+} from '@/models/item_definition.ts';
+import type {
+    InventoryRecordCreateRequest,
+    InventoryRecordModifyRequest,
+    InventoryRecordDeleteRequest,
+    InventoryRecordInfoResponse
+} from '@/models/inventory_record.ts';
 
 import {
     getCurrentToken,
@@ -859,6 +871,43 @@ export default {
     },
     getServerVersion: (): ApiResponsePromise<VersionInfo> => {
         return axios.get<ApiResponse<VersionInfo>>('v1/systems/version.json');
+    },
+    // Item Definitions
+    getItemDefinitions: (): ApiResponsePromise<ItemDefinitionInfoResponse[]> => {
+        return axios.get<ApiResponse<ItemDefinitionInfoResponse[]>>('v1/item/definitions/list.json');
+    },
+    getItemDefinition: ({ id }: { id: string }): ApiResponsePromise<ItemDefinitionInfoResponse> => {
+        return axios.get<ApiResponse<ItemDefinitionInfoResponse>>('v1/item/definitions/get.json?id=' + id);
+    },
+    addItemDefinition: (req: ItemDefinitionCreateRequest): ApiResponsePromise<ItemDefinitionInfoResponse> => {
+        return axios.post<ApiResponse<ItemDefinitionInfoResponse>>('v1/item/definitions/add.json', req);
+    },
+    modifyItemDefinition: (req: ItemDefinitionModifyRequest): ApiResponsePromise<ItemDefinitionInfoResponse> => {
+        return axios.post<ApiResponse<ItemDefinitionInfoResponse>>('v1/item/definitions/modify.json', req);
+    },
+    deleteItemDefinition: (req: ItemDefinitionDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/item/definitions/delete.json', req);
+    },
+    // Inventory Records
+    getInventoryRecords: ({ itemDefinitionId, warehouseId, status }: { itemDefinitionId?: string; warehouseId?: string; status?: string } = {}): ApiResponsePromise<InventoryRecordInfoResponse[]> => {
+        const params = new URLSearchParams();
+        if (itemDefinitionId) params.append('itemDefinitionId', itemDefinitionId);
+        if (warehouseId) params.append('warehouseId', warehouseId);
+        if (status) params.append('status', status);
+        const qs = params.toString();
+        return axios.get<ApiResponse<InventoryRecordInfoResponse[]>>('v1/inventory/records/list.json' + (qs ? '?' + qs : ''));
+    },
+    getInventoryRecord: ({ id }: { id: string }): ApiResponsePromise<InventoryRecordInfoResponse> => {
+        return axios.get<ApiResponse<InventoryRecordInfoResponse>>('v1/inventory/records/get.json?id=' + id);
+    },
+    addInventoryRecord: (req: InventoryRecordCreateRequest): ApiResponsePromise<InventoryRecordInfoResponse> => {
+        return axios.post<ApiResponse<InventoryRecordInfoResponse>>('v1/inventory/records/add.json', req);
+    },
+    modifyInventoryRecord: (req: InventoryRecordModifyRequest): ApiResponsePromise<InventoryRecordInfoResponse> => {
+        return axios.post<ApiResponse<InventoryRecordInfoResponse>>('v1/inventory/records/modify.json', req);
+    },
+    deleteInventoryRecord: (req: InventoryRecordDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/inventory/records/delete.json', req);
     },
     cancelRequest: (cancelableUuid: string) => {
         cancelableRequests[cancelableUuid] = true;

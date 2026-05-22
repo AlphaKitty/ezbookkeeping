@@ -28,6 +28,9 @@ import TransactionTagListPage from '@/views/desktop/tags/ListPage.vue';
 
 import TransactionTemplateListPage from '@/views/desktop/templates/ListPage.vue';
 
+import ItemDefinitionListPage from '@/views/desktop/items/ListPage.vue';
+import InventoryRecordListPage from '@/views/desktop/inventory/list/ListPage.vue';
+
 import UserSettingsPage from '@/views/desktop/user/UserSettingsPage.vue';
 import AppSettingsPage from '@/views/desktop/app/AppSettingsPage.vue';
 
@@ -180,6 +183,16 @@ const router = createRouter({
                     props: {
                         initType: TemplateType.Schedule.type
                     }
+                },
+                {
+                    path: '/item/definitions',
+                    component: ItemDefinitionListPage,
+                    beforeEnter: checkLogin
+                },
+                {
+                    path: '/inventory/records',
+                    component: InventoryRecordListPage,
+                    beforeEnter: checkLogin
                 },
                 {
                     path: '/exchange_rates',

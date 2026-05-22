@@ -462,6 +462,20 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/insights/explorers/move.json", bindApi(api.InsightsExplorers.InsightsExplorerMoveHandler))
 			apiV1Route.POST("/insights/explorers/delete.json", bindApi(api.InsightsExplorers.InsightsExplorerDeleteHandler))
 
+			// Item Definitions
+			apiV1Route.GET("/item/definitions/list.json", bindApi(api.ItemDefinitions.ItemDefinitionListHandler))
+			apiV1Route.GET("/item/definitions/get.json", bindApi(api.ItemDefinitions.ItemDefinitionGetHandler))
+			apiV1Route.POST("/item/definitions/add.json", bindApi(api.ItemDefinitions.ItemDefinitionCreateHandler))
+			apiV1Route.POST("/item/definitions/modify.json", bindApi(api.ItemDefinitions.ItemDefinitionModifyHandler))
+			apiV1Route.POST("/item/definitions/delete.json", bindApi(api.ItemDefinitions.ItemDefinitionDeleteHandler))
+
+			// Inventory Records
+			apiV1Route.GET("/inventory/records/list.json", bindApi(api.InventoryRecords.InventoryRecordListHandler))
+			apiV1Route.GET("/inventory/records/get.json", bindApi(api.InventoryRecords.InventoryRecordGetHandler))
+			apiV1Route.POST("/inventory/records/add.json", bindApi(api.InventoryRecords.InventoryRecordCreateHandler))
+			apiV1Route.POST("/inventory/records/modify.json", bindApi(api.InventoryRecords.InventoryRecordModifyHandler))
+			apiV1Route.POST("/inventory/records/delete.json", bindApi(api.InventoryRecords.InventoryRecordDeleteHandler))
+
 			// Large Language Models
 			if config.ReceiptImageRecognitionLLMConfig != nil && config.ReceiptImageRecognitionLLMConfig.LLMProvider != "" {
 				if config.TransactionFromAIImageRecognition {

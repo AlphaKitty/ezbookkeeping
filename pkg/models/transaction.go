@@ -137,6 +137,8 @@ type Transaction struct {
 	Comment              string            `xorm:"VARCHAR(255) NOT NULL"`
 	GeoLongitude         float64           `xorm:"INDEX(IDX_transaction_uid_deleted_time_longitude_latitude)"`
 	GeoLatitude          float64           `xorm:"INDEX(IDX_transaction_uid_deleted_time_longitude_latitude)"`
+	InventoryRecordId    int64             `xorm:"NOT NULL DEFAULT 0"`
+	InventoryAction      InventoryAction   `xorm:"VARCHAR(16) NOT NULL DEFAULT 'none'"`
 	CreatedIp            string            `xorm:"VARCHAR(39)"`
 	ScheduledCreated     bool
 	CreatedUnixTime      int64
@@ -172,6 +174,8 @@ type TransactionCreateRequest struct {
 	PictureIds           []string                       `json:"pictureIds"`
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
+	InventoryRecordId    int64                          `json:"inventoryRecordId,string"`
+	InventoryAction      InventoryAction                `json:"inventoryAction"`
 	ClientSessionId      string                         `json:"clientSessionId"`
 }
 
@@ -190,6 +194,7 @@ type TransactionModifyRequest struct {
 	PictureIds           []string                       `json:"pictureIds"`
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
+	InventoryRecordId    int64                          `json:"inventoryRecordId,string"`
 }
 
 // TransactionImportRequest represents all parameters of transaction import request
@@ -409,6 +414,8 @@ type TransactionInfoResponse struct {
 	Pictures             TransactionPictureInfoBasicResponseSlice `json:"pictures,omitempty"`
 	Comment              string                                   `json:"comment"`
 	GeoLocation          *TransactionGeoLocationResponse          `json:"geoLocation,omitempty"`
+	InventoryRecordId    int64                                    `json:"inventoryRecordId,string"`
+	InventoryAction      InventoryAction                          `json:"inventoryAction,omitempty"`
 	Editable             bool                                     `json:"editable"`
 }
 
@@ -619,6 +626,8 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, editable bool) *
 		TagIds:               utils.Int64ArrayToStringArray(tagIds),
 		Comment:              t.Comment,
 		GeoLocation:          geoLocation,
+		InventoryRecordId:    t.InventoryRecordId,
+		InventoryAction:      t.InventoryAction,
 		Editable:             editable,
 	}
 }

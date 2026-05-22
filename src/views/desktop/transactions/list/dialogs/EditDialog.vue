@@ -101,13 +101,13 @@
                                                   :color="sourceAmountColor"
                                                   :currency="sourceAccountCurrency"
                                                   :show-currency="true"
-                                                  :readonly="mode === TransactionEditPageMode.View"
+                                                  :readonly="mode === TransactionEditPageMode.View || linkInventory"
                                                   :disabled="loading || submitting"
                                                   :persistent-placeholder="true"
                                                   :hide="transaction.hideAmount"
                                                   :label="sourceAmountTitle"
                                                   :placeholder="tt(sourceAmountName)"
-                                                  :enable-formula="mode !== TransactionEditPageMode.View"
+                                                  :enable-formula="mode !== TransactionEditPageMode.View && !linkInventory"
                                                   v-model="transaction.sourceAmount"/>
                                 </v-col>
                                 <v-col cols="12" :md="6" v-if="transaction.type === TransactionType.Transfer">
@@ -123,6 +123,48 @@
                                                   :enable-formula="mode !== TransactionEditPageMode.View"
                                                   v-model="transaction.destinationAmount"/>
                                 </v-col>
+                                <v-col cols="12" v-if="transaction.type === TransactionType.Expense || transaction.type === TransactionType.Income">
+                                    <v-checkbox v-model="linkInventory" :label="tt('Link Inventory')" :disabled="mode === TransactionEditPageMode.View" density="compact" hide-details class="mb-2" @update:model-value="onLinkInventoryToggle"/>
+                                    <p v-if="linkInventory && currentInventoryItemDef?.pricingExpr" class="text-caption text-primary mt-1">{{ tt('inventoryAmountAutoCalculated') }}</p>
+                                    <template v-if="linkInventory">
+                                        <v-autocomplete v-model="selectedInventoryRecordId" :label="tt('Inventory Record')" :items="inventoryRecordOptions" item-title="name" item-value="id" :custom-filter="filterInventoryRecord" density="compact" variant="outlined" class="mb-3" :disabled="mode === TransactionEditPageMode.View" clearable auto-select-first @update:model-value="onInventoryRecordSelect"/>
+                                        <p v-if="currentInventoryItemDef" class="text-caption text-disabled mb-3">{{ tt('Item Type') }}: {{ currentInventoryItemDef.name }}</p>
+                                        <v-row v-if="currentInventoryItemDef?.fieldSchema?.fields?.length">
+                                            <v-col v-for="field in currentInventoryItemDef.fieldSchema.fields" :key="field.key" cols="12" :md="field.fieldType === 'text' ? 12 : 6">
+                                                <v-text-field v-if="field.fieldType === 'number'"
+                                                    v-model.number="inventoryFieldValues[field.key]"
+                                                    :label="field.key"
+                                                    :suffix="field.unit"
+                                                    type="number"
+                                                    density="compact" variant="outlined"
+                                                    :rules="field.required ? [invRequired] : []"
+                                                    :disabled="mode === TransactionEditPageMode.View || !field.editable"/>
+                                                <v-text-field v-else-if="field.fieldType === 'text'"
+                                                    v-model="inventoryFieldValues[field.key]"
+                                                    :label="field.key"
+                                                    density="compact" variant="outlined"
+                                                    :rules="field.required ? [invRequired] : []"
+                                                    :disabled="mode === TransactionEditPageMode.View || !field.editable"/>
+                                                <v-select v-else-if="field.fieldType === 'enum'"
+                                                    v-model="inventoryFieldValues[field.key]"
+                                                    :label="field.key"
+                                                    :items="(field as any).options || []"
+                                                    density="compact" variant="outlined"
+                                                    :rules="field.required ? [invRequired] : []"
+                                                    :disabled="mode === TransactionEditPageMode.View || !field.editable"/>
+                                                <v-text-field v-else-if="field.fieldType === 'date'"
+                                                    v-model="inventoryFieldValues[field.key]"
+                                                    :label="field.key"
+                                                    :type="(field as any).format === 'YYYY-MM-DD HH:mm:ss' ? 'datetime-local' : 'date'"
+                                                    density="compact" variant="outlined"
+                                                    :rules="field.required ? [invRequired] : []"
+                                                    :disabled="mode === TransactionEditPageMode.View || !field.editable"/>
+                                            </v-col>
+                                        </v-row>
+                                        <p v-if="!currentInventoryItemDef?.fieldSchema?.fields?.length && inventoryItemDefId" class="text-caption text-disabled mt-2">{{ tt('This item type has no custom fields defined') }}</p>
+                                        <v-alert v-if="inventoryFormError" type="error" variant="tonal" density="compact" class="mt-2" closable @click:close="inventoryFormError = ''">{{ inventoryFormError }}</v-alert>
+                                    </template>
+                                </v-col>
                                 <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense">
                                     <v-tooltip :disabled="hasVisibleExpenseCategories" :text="hasVisibleExpenseCategories ? '' : tt('No secondary expense categories are available')">
                                         <template v-slot:activator="{ props }">
@@ -133,7 +175,7 @@
                                                                    secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
                                                                    secondary-icon-field="icon" secondary-icon-type="category" secondary-color-field="color"
                                                                    secondary-hidden-field="hidden"
-                                                                   :readonly="mode === TransactionEditPageMode.View"
+                                                                   :readonly="mode === TransactionEditPageMode.View || expenseCategoryLocked"
                                                                    :disabled="loading || submitting || !hasVisibleExpenseCategories"
                                                                    :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
                                                                    :show-selection-primary-text="true"
@@ -157,7 +199,7 @@
                                                                    secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
                                                                    secondary-icon-field="icon" secondary-icon-type="category" secondary-color-field="color"
                                                                    secondary-hidden-field="hidden"
-                                                                   :readonly="mode === TransactionEditPageMode.View"
+                                                                   :readonly="mode === TransactionEditPageMode.View || incomeCategoryLocked"
                                                                    :disabled="loading || submitting || !hasVisibleIncomeCategories"
                                                                    :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
                                                                    :show-selection-primary-text="true"
@@ -500,6 +542,11 @@ import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
 
+import api from '@/lib/services.ts';
+import type { ItemDefinitionInfoResponse } from '@/models/item_definition.ts';
+import type { InventoryRecordInfoResponse } from '@/models/inventory_record.ts';
+import { evaluateExpressionToAmount } from '@/lib/evaluator.ts';
+
 import type { Coordinate } from '@/core/coordinate.ts';
 import { CategoryType } from '@/core/category.ts';
 import { TransactionType, TransactionEditScopeType, TransactionQuickAddButtonActionType } from '@/core/transaction.ts';
@@ -641,6 +688,58 @@ const removingPictureId = ref<string>('');
 
 const initOptions = ref<TransactionEditOptions | undefined>(undefined);
 
+const linkInventory = ref(false);
+const inventoryItemDefId = ref('');
+const inventoryFieldValues = ref<Record<string, any>>({});
+const inventoryItemDefs = ref<ItemDefinitionInfoResponse[]>([]);
+const currentInventoryItemDef = ref<ItemDefinitionInfoResponse | null>(null);
+const inventoryFormError = ref('');
+const inventoryItemDefsLoaded = ref(false);
+const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
+const selectedInventoryRecordId = ref('');
+const inventoryRecordsLoaded = ref(false);
+
+const inventoryRecordOptions = computed(() => {
+    const sorted = [...inventoryRecords.value].sort((a, b) => b.createdUnixTime - a.createdUnixTime);
+    return sorted.map(r => {
+        const def = inventoryItemDefs.value.find(d => d.id === r.itemDefinitionId);
+        const namingFields = def?.fieldSchema?.fields?.filter(f => f.participateInNaming) || [];
+        const namingParts: string[] = [];
+        const allFieldTexts: string[] = [];
+        if (r.fieldValues?.values) {
+            for (const f of namingFields) {
+                const val = r.fieldValues.values[f.key];
+                if (val !== null && val !== undefined && val !== '') {
+                    namingParts.push(String(val));
+                }
+            }
+            for (const val of Object.values(r.fieldValues.values)) {
+                if (val !== null && val !== undefined && val !== '') {
+                    allFieldTexts.push(String(val));
+                }
+            }
+        }
+        const displayName = r.itemDefinitionName
+            ? (namingParts.length ? `${r.itemDefinitionName} - ${namingParts.join(' - ')}` : r.itemDefinitionName)
+            : `#${r.id}`;
+        const searchText = [r.itemDefinitionName || '', ...allFieldTexts].join(' ').toLowerCase();
+        return { id: r.id, name: displayName, searchText };
+    });
+});
+
+function filterInventoryRecord(item: any, queryText: string): boolean {
+    if (!queryText) return true;
+    const q = queryText.toLowerCase();
+    return item.raw.searchText.includes(q);
+}
+
+const expenseCategoryLocked = computed(() =>
+    linkInventory.value && !!currentInventoryItemDef.value?.expenseCategoryId && currentInventoryItemDef.value.expenseCategoryId !== '0'
+);
+const incomeCategoryLocked = computed(() =>
+    linkInventory.value && !!currentInventoryItemDef.value?.incomeCategoryId && currentInventoryItemDef.value.incomeCategoryId !== '0'
+);
+
 let resolveFunc: ((response?: TransactionEditResponse) => void) | null = null;
 let rejectFunc: ((reason?: unknown) => void) | null = null;
 
@@ -776,6 +875,9 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             const transaction: Transaction = responses[3];
             setTransactionModel(transaction, options, true);
             originalTransactionEditable.value = transaction.editable;
+            if (transaction.inventoryRecordId) {
+                loadInventoryDataForExistingTransaction(transaction.inventoryRecordId);
+            }
         } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[3] && responses[3] instanceof TransactionTemplate) {
             const template: TransactionTemplate = responses[3];
             setTransactionModel(template, options, false);
@@ -809,6 +911,146 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
     });
 }
 
+function invRequired(v: any): true | string {
+    if (v === null || v === undefined || v === '') return tt('Required');
+    if (typeof v === 'number' && isNaN(v)) return tt('Required');
+    return true;
+}
+
+async function loadInventoryItemDefs() {
+    if (inventoryItemDefsLoaded.value) return;
+    const resp = await api.getItemDefinitions();
+    inventoryItemDefs.value = resp.data.result;
+    inventoryItemDefsLoaded.value = true;
+}
+
+async function loadInventoryRecords() {
+    if (inventoryRecordsLoaded.value) return;
+    try {
+        const resp = await api.getInventoryRecords();
+        inventoryRecords.value = resp.data.result;
+        inventoryRecordsLoaded.value = true;
+    } catch (error: any) {
+        logger.warn('failed to load inventory records', error);
+    }
+}
+
+function onLinkInventoryToggle(enabled: boolean | null) {
+    if (enabled) {
+        loadInventoryItemDefs();
+        loadInventoryRecords();
+    } else {
+        inventoryItemDefId.value = '';
+        currentInventoryItemDef.value = null;
+        inventoryFieldValues.value = {};
+        inventoryFormError.value = '';
+        selectedInventoryRecordId.value = '';
+    }
+}
+
+async function onInventoryRecordSelect(recordId: string) {
+    inventoryFormError.value = '';
+    if (!recordId) {
+        return;
+    }
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return;
+    try {
+        await loadInventoryItemDefs();
+        inventoryItemDefId.value = record.itemDefinitionId;
+        const defResp = await api.getItemDefinition({ id: record.itemDefinitionId });
+        currentInventoryItemDef.value = defResp.data.result;
+        const def = currentInventoryItemDef.value;
+        if (def.incomeCategoryId && def.incomeCategoryId !== '0') {
+            transaction.value.incomeCategoryId = def.incomeCategoryId;
+        }
+        if (def.expenseCategoryId && def.expenseCategoryId !== '0') {
+            transaction.value.expenseCategoryId = def.expenseCategoryId;
+        }
+        if (record.fieldValues?.values) {
+            inventoryFieldValues.value = { ...record.fieldValues.values };
+        } else {
+            inventoryFieldValues.value = {};
+        }
+        recalcInventoryAmount();
+    } catch (error: any) {
+        logger.warn('failed to load inventory record detail', error);
+        inventoryFormError.value = tt('Failed to load inventory record details');
+    }
+}
+
+async function loadInventoryDataForExistingTransaction(inventoryRecordId: string) {
+    try {
+        await loadInventoryItemDefs();
+        await loadInventoryRecords();
+        const invResp = await api.getInventoryRecord({ id: inventoryRecordId });
+        const invRecord = invResp.data.result;
+        inventoryItemDefId.value = invRecord.itemDefinitionId;
+        selectedInventoryRecordId.value = invRecord.id;
+        const defResp = await api.getItemDefinition({ id: invRecord.itemDefinitionId });
+        currentInventoryItemDef.value = defResp.data.result;
+        const def = currentInventoryItemDef.value;
+        if (def.incomeCategoryId && def.incomeCategoryId !== '0') {
+            transaction.value.incomeCategoryId = def.incomeCategoryId;
+        }
+        if (def.expenseCategoryId && def.expenseCategoryId !== '0') {
+            transaction.value.expenseCategoryId = def.expenseCategoryId;
+        }
+        if (invRecord.fieldValues?.values) {
+            inventoryFieldValues.value = { ...invRecord.fieldValues.values };
+        }
+        linkInventory.value = true;
+        recalcInventoryAmount();
+    } catch (error: any) {
+        logger.warn('failed to load inventory data for existing transaction', error);
+    }
+}
+
+function recalcInventoryAmount() {
+    const expr = currentInventoryItemDef.value?.pricingExpr;
+    if (!expr) return;
+
+    let substituted = expr;
+    for (const field of currentInventoryItemDef.value?.fieldSchema?.fields || []) {
+        const val = inventoryFieldValues.value[field.key];
+        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
+            return; // not all fields filled yet
+        }
+        substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
+    }
+
+    const amount = evaluateExpressionToAmount(substituted);
+    if (amount !== undefined) {
+        transaction.value.sourceAmount = amount;
+    }
+}
+
+function validateInventoryFields(): string | null {
+    if (!currentInventoryItemDef.value?.fieldSchema?.fields?.length) return null;
+    for (const field of currentInventoryItemDef.value.fieldSchema.fields) {
+        if (!field.required) continue;
+        const v = inventoryFieldValues.value[field.key];
+        if (v === null || v === undefined || v === '') return `${tt('Required')}: ${field.key}`;
+        if (typeof v === 'number' && isNaN(v)) return `${tt('Required')}: ${field.key}`;
+    }
+    return null;
+}
+
+function resetInventoryState() {
+    linkInventory.value = false;
+    inventoryItemDefId.value = '';
+    currentInventoryItemDef.value = null;
+    inventoryFieldValues.value = {};
+    inventoryFormError.value = '';
+    selectedInventoryRecordId.value = '';
+    transaction.value.inventoryRecordId = undefined;
+    transaction.value.inventoryAction = undefined;
+}
+
+watch(inventoryFieldValues, () => {
+    recalcInventoryAmount();
+}, { deep: true });
+
 function save(afterAction: AfterSaveAction): void {
     const problemMessage = inputEmptyProblemMessage.value;
 
@@ -838,6 +1080,7 @@ function save(afterAction: AfterSaveAction): void {
                     snackbar.value?.showMessage('You have added a new transaction');
                     updateTransactionModelByAfterSaveAction(afterAction, initOptions.value);
                     clientSessionId.value = generateRandomUUID();
+                    resetInventoryState();
                 } else {
                     if (resolveFunc) {
                         if (mode.value === TransactionEditPageMode.Add) {
@@ -880,13 +1123,53 @@ function save(afterAction: AfterSaveAction): void {
             });
         };
 
-        if (transaction.value.sourceAmount === 0) {
-            confirmDialog.value?.open('Are you sure you want to save this transaction with a zero amount?').then(() => {
+        const saveWithOptionalInventory = async function () {
+            if (linkInventory.value && mode.value === TransactionEditPageMode.Add) {
+                const invErr = validateInventoryFields();
+                if (invErr) {
+                    inventoryFormError.value = invErr;
+                    return;
+                }
+
+                submitting.value = true;
+                try {
+                    const fieldValuesPayload = currentInventoryItemDef.value?.fieldSchema?.fields?.length
+                        ? { values: { ...inventoryFieldValues.value } }
+                        : null;
+                    const inventoryAction = transaction.value.type === TransactionType.Expense ? 'stock_in' : 'stock_out';
+                    const resp = await api.addInventoryRecord({
+                        itemDefinitionId: inventoryItemDefId.value,
+                        warehouseId: '0',
+                        fieldValues: fieldValuesPayload,
+                        quantity: 0,
+                        unit: '',
+                        unitPrice: 0,
+                        transporter: '',
+                        batchNo: '',
+                        comment: '',
+                    });
+                    transaction.value.inventoryRecordId = resp.data.result.id;
+                    transaction.value.inventoryAction = inventoryAction;
+                    submitting.value = false;
+                } catch (error: any) {
+                    submitting.value = false;
+                    if (!error.processed) {
+                        snackbar.value?.showError(error);
+                    }
+                    return;
+                }
+            }
+
+            if (transaction.value.sourceAmount === 0) {
+                confirmDialog.value?.open('Are you sure you want to save this transaction with a zero amount?').then(() => {
+                    doSubmit();
+                });
+            } else {
                 doSubmit();
-            });
-        } else {
-            doSubmit();
-        }
+            }
+        };
+
+        saveWithOptionalInventory();
     } else if (props.type === TransactionEditPageType.Template && (mode.value === TransactionEditPageMode.Add || mode.value === TransactionEditPageMode.Edit)) {
         submitting.value = true;
 
@@ -931,6 +1214,8 @@ function duplicate(withTime?: boolean, withGeoLocation?: boolean): void {
     submitted.value = false;
     activeTab.value = 'basicInfo';
     transaction.value.id = '';
+    transaction.value.inventoryRecordId = undefined;
+    selectedInventoryRecordId.value = '';
 
     if (!withTime) {
         transaction.value.time = getCurrentUnixTime();
