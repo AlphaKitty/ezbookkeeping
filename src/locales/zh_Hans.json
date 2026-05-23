@@ -2729,5 +2729,11 @@
     "Add Field": "添加字段",
     "Actions": "操作",
     "Required": "必填",
-    "Comment": "备注"
+    "Comment": "备注",
+    "No fields defined yet": "未定义字段",
+    "Field": "字段",
+    "Option": "选项",
+    "in_stock": "在库",
+    "reserved": "已预留",
+    "sold_out": "已售出"
 }

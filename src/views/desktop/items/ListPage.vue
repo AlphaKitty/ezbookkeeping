@@ -168,6 +168,7 @@
                     </div>
                 </v-card>
             </v-card-text>
+            <v-alert v-if="validationError" type="error" variant="tonal" density="compact" class="mx-4 mb-2" closable @click:close="validationError = ''">{{ validationError }}</v-alert>
             <v-card-actions>
                 <v-spacer/>
                 <v-btn variant="text" @click="showDialog = false">{{ tt('Cancel') }}</v-btn>
@@ -205,7 +206,7 @@ import {
 import api from '@/lib/services.ts';
 import type { ItemDefinitionInfoResponse } from '@/models/item_definition.ts';
 import type { TransactionCategory } from '@/models/transaction_category.ts';
-import { ITEM_FIELD_TYPE_OPTIONS, ITEM_DATETIME_FORMAT_OPTIONS } from '@/models/item_definition.ts';
+import { ITEM_FIELD_TYPE_OPTIONS, ITEM_DATETIME_FORMAT_OPTIONS, ItemFieldType } from '@/models/item_definition.ts';
 
 import IconSelect from '@/components/desktop/IconSelect.vue';
 import ItemIcon from '@/components/desktop/ItemIcon.vue';
@@ -247,6 +248,7 @@ const required = (v: string) => !!v || tt('Required');
 const loading = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
+const validationError = ref('');
 const definitions = ref<ItemDefinitionInfoResponse[]>([]);
 const showDialog = ref(false);
 const showDeleteDialog = ref(false);
@@ -254,8 +256,15 @@ const isEditing = ref(false);
 const deleteTarget = ref<ItemDefinitionInfoResponse | null>(null);
 const editingId = ref<string>('');
 
-const fieldTypeOptions = ITEM_FIELD_TYPE_OPTIONS;
-const dateTimeFormatOptions = ITEM_DATETIME_FORMAT_OPTIONS;
+const fieldTypeOptions = computed(() => ITEM_FIELD_TYPE_OPTIONS.map(opt => ({
+    value: opt.value,
+    label: tt(opt.value === ItemFieldType.NUMBER ? 'Number' : opt.value === ItemFieldType.TEXT ? 'Text' : opt.value === ItemFieldType.ENUM ? 'Enum' : 'Date'),
+})));
+
+const dateTimeFormatOptions = computed(() => ITEM_DATETIME_FORMAT_OPTIONS.map(opt => ({
+    value: opt.value,
+    label: tt(opt.value),
+})));
 
 const emptyField = (): MutableItemField => ({
     key: '', label: '', fieldType: 'number', required: true, editable: false, participateInNaming: false, unit: '', sortOrder: 0,
@@ -342,6 +351,15 @@ function insertFieldKey(key: string) {
 }
 
 async function save() {
+    if (!form.value.incomeCategoryId) {
+        validationError.value = tt('Income Category') + ': ' + tt('Required');
+        return;
+    }
+    if (!form.value.expenseCategoryId) {
+        validationError.value = tt('Expense Category') + ': ' + tt('Required');
+        return;
+    }
+    validationError.value = '';
     saving.value = true;
     try {
         const fieldSchema = { fields: form.value.fields.map((f, i) => ({ ...f, sortOrder: i })) };

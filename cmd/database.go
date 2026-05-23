@@ -189,5 +189,13 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] inventory record table maintained successfully")
 
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.TransactionInventoryIndex))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] transaction inventory index table maintained successfully")
+
 	return nil
 }

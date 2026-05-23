@@ -79,6 +79,7 @@ const loadingError = ref<unknown | null>(null);
 const definitions = ref<ItemDefinitionInfoResponse[]>([]);
 const showDeleteSheet = ref(false);
 const deleteTarget = ref<ItemDefinitionInfoResponse | null>(null);
+const hasNavigatedAway = ref(false);
 
 function init() {
     loading.value = true;
@@ -106,10 +107,12 @@ function reload(done?: () => void) {
 }
 
 function add() {
+    hasNavigatedAway.value = true;
     props.f7router.navigate('/item/definition/add');
 }
 
 function edit(def: ItemDefinitionInfoResponse) {
+    hasNavigatedAway.value = true;
     props.f7router.navigate('/item/definition/edit?id=' + def.id);
 }
 
@@ -134,6 +137,10 @@ async function doDelete() {
 }
 
 function onPageAfterIn() {
+    if (hasNavigatedAway.value && !loading.value) {
+        reload();
+    }
+    hasNavigatedAway.value = false;
     routeBackOnError(props.f7router, loadingError);
 }
 

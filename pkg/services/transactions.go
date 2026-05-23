@@ -557,7 +557,7 @@ func (s *TransactionService) GetTransactionCount(c core.Context, uid int64, maxT
 }
 
 // CreateTransaction saves a new transaction to database
-func (s *TransactionService) CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64) error {
+func (s *TransactionService) CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, inventoryRecordIds []int64, inventoryRecordAmounts []float64) error {
 	if transaction.Uid <= 0 {
 		return errs.ErrUserIdInvalid
 	}
@@ -624,7 +624,7 @@ func (s *TransactionService) CreateTransaction(c core.Context, transaction *mode
 	userDataDb := s.UserDataDB(transaction.Uid)
 
 	return userDataDb.DoTransaction(c, func(sess *xorm.Session) error {
-		return s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, tagIds, pictureIds, pictureUpdateModel)
+		return s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, tagIds, pictureIds, pictureUpdateModel, inventoryRecordIds, inventoryRecordAmounts)
 	})
 }
 
@@ -736,7 +736,7 @@ func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, 
 			transaction := transactions[i]
 			transactionTagIndexes := allTransactionTagIndexes[transaction.TransactionId]
 			transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-			err := s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, transactionTagIds, nil, nil)
+			err := s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, transactionTagIds, nil, nil, nil, nil)
 
 			currentProcess = float64(i) / float64(len(transactions)) * 100
 
@@ -910,7 +910,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 		}
 
 		tagIds := template.GetTagIds()
-		err = s.CreateTransaction(c, transaction, tagIds, nil)
+		err = s.CreateTransaction(c, transaction, tagIds, nil, nil, nil)
 
 		if err == nil {
 			successCount++
@@ -1893,6 +1893,13 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 			return err
 		}
 
+		// Update transaction inventory indexes
+		err = TransactionInventoryIndexes.DeleteInventoryIndexesByTransactionId(c, uid, oldTransaction.TransactionId, sess)
+
+		if err != nil {
+			return err
+		}
+
 		// Update transaction picture
 		_, err = sess.Cols("deleted", "deleted_unix_time").Where("uid=? AND deleted=? AND transaction_id=?", uid, false, oldTransaction.TransactionId).Update(pictureUpdateModel)
 
@@ -2514,7 +2521,7 @@ func (s *TransactionService) GetTransactionIds(transactions []*models.Transactio
 	return transactionIds
 }
 
-func (s *TransactionService) doCreateTransaction(c core.Context, database *datastore.Database, sess *xorm.Session, transaction *models.Transaction, transactionTagIndexes []*models.TransactionTagIndex, tagIds []int64, pictureIds []int64, pictureUpdateModel *models.TransactionPictureInfo) error {
+func (s *TransactionService) doCreateTransaction(c core.Context, database *datastore.Database, sess *xorm.Session, transaction *models.Transaction, transactionTagIndexes []*models.TransactionTagIndex, tagIds []int64, pictureIds []int64, pictureUpdateModel *models.TransactionPictureInfo, inventoryRecordIds []int64, inventoryRecordAmounts []float64) error {
 	// Get and verify source and destination account
 	sourceAccount, destinationAccount, err := s.getAccountModels(sess, transaction)
 
@@ -2682,6 +2689,15 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 				log.Errorf(c, "[transactions.doCreateTransaction] failed to add transaction tag index, because %s", err.Error())
 				return err
 			}
+		}
+	}
+
+	// Insert inventory record indexes
+	if len(inventoryRecordIds) > 0 {
+		err := TransactionInventoryIndexes.CreateInventoryIndexes(c, transaction.Uid, transaction.TransactionId, inventoryRecordIds, inventoryRecordAmounts, transaction.TransactionTime, sess)
+		if err != nil {
+			log.Errorf(c, "[transactions.doCreateTransaction] failed to add transaction inventory index, because %s", err.Error())
+			return err
 		}
 	}
 

@@ -2729,5 +2729,11 @@
     "Add Field": "Add Field",
     "Actions": "Actions",
     "Required": "Required",
-    "Comment": "Comment"
+    "Comment": "Comment",
+    "No fields defined yet": "No fields defined yet",
+    "Field": "Field",
+    "Option": "Option",
+    "in_stock": "In Stock",
+    "reserved": "Reserved",
+    "sold_out": "Sold Out"
 }

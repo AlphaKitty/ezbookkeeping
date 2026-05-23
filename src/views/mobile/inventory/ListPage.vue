@@ -74,7 +74,6 @@ import { useI18nUIComponents, showLoading, hideLoading } from '@/lib/ui/mobile.t
 
 import api from '@/lib/services.ts';
 import type { InventoryRecordInfoResponse, InventoryStatus } from '@/models/inventory_record.ts';
-import { INVENTORY_STATUS_OPTIONS } from '@/models/inventory_record.ts';
 import type { ItemDefinitionInfoResponse } from '@/models/item_definition.ts';
 
 import ItemIcon from '@/components/mobile/ItemIcon.vue';
@@ -93,6 +92,7 @@ const itemDefinitions = ref<ItemDefinitionInfoResponse[]>([]);
 const activeItemDefId = ref<string>('');
 const showDeleteSheet = ref(false);
 const deleteTarget = ref<InventoryRecordInfoResponse | null>(null);
+const hasNavigatedAway = ref(false);
 
 const displayRecords = computed(() => {
     if (!activeItemDefId.value) return records.value;
@@ -106,7 +106,10 @@ function getRecordDisplayName(record: InventoryRecordInfoResponse): string {
     if (record.fieldValues?.values) {
         for (const f of namingFields) {
             const val = record.fieldValues.values[f.key];
-            if (val !== null && val !== undefined && val !== '') namingParts.push(String(val));
+            if (val !== null && val !== undefined && val !== '') {
+                const part = f.unit ? `${String(val)}${f.unit}` : String(val);
+                namingParts.push(part);
+            }
         }
     }
     if (record.itemDefinitionName) {
@@ -120,8 +123,7 @@ function getItemDefIcon(itemDefinitionId: string): string {
 }
 
 function statusLabel(status: InventoryStatus): string {
-    const found = INVENTORY_STATUS_OPTIONS.find(o => o.value === status);
-    return found?.label || status;
+    return tt(status);
 }
 
 function init() {
@@ -158,10 +160,12 @@ function reload(done?: () => void) {
 }
 
 function add() {
+    hasNavigatedAway.value = true;
     props.f7router.navigate('/inventory/record/add');
 }
 
 function edit(record: InventoryRecordInfoResponse) {
+    hasNavigatedAway.value = true;
     props.f7router.navigate('/inventory/record/edit?id=' + record.id);
 }
 
@@ -186,6 +190,10 @@ async function doDelete() {
 }
 
 function onPageAfterIn() {
+    if (hasNavigatedAway.value && !loading.value) {
+        reload();
+    }
+    hasNavigatedAway.value = false;
     routeBackOnError(props.f7router, loadingError);
 }
 

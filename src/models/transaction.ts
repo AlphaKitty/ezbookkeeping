@@ -27,6 +27,8 @@ export class Transaction implements TransactionInfoResponse {
     public comment: string;
     public editable: boolean;
     public inventoryRecordId?: string;
+    public inventoryRecordIds?: string[];
+    public inventoryRecordAmounts?: number[];
     public inventoryAction?: string;
 
     private _pictures?: TransactionPicture[];
@@ -245,6 +247,8 @@ export class Transaction implements TransactionInfoResponse {
             geoLocation: this.getNormalizedGeoLocation(),
             clientSessionId: clientSessionId,
             inventoryRecordId: this.inventoryRecordId,
+            inventoryRecordIds: this.inventoryRecordIds,
+            inventoryRecordAmounts: this.inventoryRecordAmounts,
             inventoryAction: this.inventoryAction,
         };
     }
@@ -271,6 +275,8 @@ export class Transaction implements TransactionInfoResponse {
             comment: this.comment,
             geoLocation: this.getNormalizedGeoLocation(),
             inventoryRecordId: this.inventoryRecordId,
+            inventoryRecordIds: this.inventoryRecordIds,
+            inventoryRecordAmounts: this.inventoryRecordAmounts,
         };
     }
 
@@ -365,6 +371,7 @@ export class Transaction implements TransactionInfoResponse {
         }
 
         transaction.inventoryRecordId = transactionResponse.inventoryRecordId;
+        transaction.inventoryRecordIds = transactionResponse.inventoryRecordIds;
         transaction.inventoryAction = transactionResponse.inventoryAction;
 
         return transaction;
@@ -549,6 +556,8 @@ export interface TransactionCreateRequest {
     readonly geoLocation?: TransactionGeoLocationRequest;
     readonly clientSessionId: string;
     readonly inventoryRecordId?: string;
+    readonly inventoryRecordIds?: string[];
+    readonly inventoryRecordAmounts?: number[];
     readonly inventoryAction?: string;
 }
 
@@ -567,6 +576,8 @@ export interface TransactionModifyRequest {
     readonly comment: string;
     readonly geoLocation?: TransactionGeoLocationRequest;
     readonly inventoryRecordId?: string;
+    readonly inventoryRecordIds?: string[];
+    readonly inventoryRecordAmounts?: number[];
 }
 
 export interface TransactionBatchUpdateCategoryRequest {
@@ -678,6 +689,7 @@ export interface TransactionInfoResponse {
     readonly geoLocation?: TransactionGeoLocationResponse;
     readonly editable: boolean;
     readonly inventoryRecordId?: string;
+    readonly inventoryRecordIds?: string[];
     readonly inventoryAction?: string;
 }
 

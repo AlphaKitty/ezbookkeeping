@@ -185,7 +185,7 @@ func (h *mcpAddTransactionToolHandler) Handle(c *core.WebContext, callToolReq *M
 	}
 
 	if !addTransactionRequest.DryRun {
-		err = services.GetTransactionService().CreateTransaction(c, transaction, tagIds, nil)
+		err = services.GetTransactionService().CreateTransaction(c, transaction, tagIds, nil, nil, nil)
 
 		if err != nil {
 			log.Errorf(c, "[add_transaction.Handle] failed to create transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, err.Error())

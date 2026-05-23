@@ -122,7 +122,7 @@
                 <f7-actions-button v-for="opt in fieldTypeOptions" :key="opt.value"
                                    :bold="form.fields[showFieldTypeSheetIdx]?.fieldType === opt.value"
                                    @click="onFieldTypeSelect(opt.value)">
-                    {{ opt.label }}
+                    {{ fieldTypeLabels[opt.value] || opt.label }}
                 </f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
@@ -138,7 +138,7 @@
                 <f7-actions-button v-for="opt in dateTimeFormatOptions" :key="opt.value"
                                    :bold="form.fields[showFormatSheetIdx]?.format === opt.value"
                                    @click="onFormatSelect(opt.value)">
-                    {{ opt.label }}
+                    {{ dateFormatLabels[opt.value] || opt.label }}
                 </f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
@@ -341,6 +341,15 @@ async function save() {
         return;
     }
     nameError.value = '';
+
+    if (!form.value.incomeCategoryId) {
+        showToast(tt('Income Category') + ' - ' + tt('Required'));
+        return;
+    }
+    if (!form.value.expenseCategoryId) {
+        showToast(tt('Expense Category') + ' - ' + tt('Required'));
+        return;
+    }
 
     saving.value = true;
     showLoading();

@@ -108,9 +108,11 @@ import api from '@/lib/services.ts';
 import type { ItemDefinitionInfoResponse, ItemField } from '@/models/item_definition.ts';
 
 const props = defineProps<{
+    f7route: Router.Route;
     f7router: Router.Router;
-    id?: string;
 }>();
+
+const id = props.f7route.query['id'] as string | undefined;
 
 const { tt } = useI18n();
 const { showToast } = useI18nUIComponents();
@@ -177,6 +179,19 @@ async function save() {
     if (!form.value.itemDefinitionId) {
         showToast(tt('Required'));
         return;
+    }
+
+    const requiredFields = currentItemDefinition.value?.fieldSchema?.fields?.filter(f => f.required) || [];
+    for (const field of requiredFields) {
+        const v = fieldValues.value[field.key];
+        if (v === null || v === undefined || v === '') {
+            showToast(`${field.key}: ${tt('Required')}`);
+            return;
+        }
+        if (typeof v === 'number' && isNaN(v)) {
+            showToast(`${field.key}: ${tt('Required')}`);
+            return;
+        }
     }
 
     saving.value = true;
@@ -256,8 +271,8 @@ onMounted(async () => {
         if (!error.processed) showToast(error.message || error);
     }
 
-    if (props.id) {
-        loadInventoryRecord(props.id);
+    if (id) {
+        loadInventoryRecord(id);
     }
 });
 </script>

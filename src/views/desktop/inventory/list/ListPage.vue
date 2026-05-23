@@ -123,7 +123,6 @@ import { mdiRefresh, mdiPencilOutline, mdiDeleteOutline } from '@mdi/js';
 
 import api from '@/lib/services.ts';
 import type { InventoryRecordInfoResponse } from '@/models/inventory_record.ts';
-import { INVENTORY_STATUS_OPTIONS } from '@/models/inventory_record.ts';
 import type { ItemDefinitionInfoResponse } from '@/models/item_definition.ts';
 
 type DisplayRecord = InventoryRecordInfoResponse & Record<string, any>;
@@ -214,8 +213,7 @@ function statusColor(status: string): string {
 }
 
 function statusLabel(status: string): string {
-    const found = INVENTORY_STATUS_OPTIONS.find(o => o.value === status);
-    return found?.label || status;
+    return tt(status);
 }
 
 function formatTime(unixTime: number): string {

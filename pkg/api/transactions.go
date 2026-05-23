@@ -973,7 +973,7 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 
 	transactionEditable := transaction.IsEditable(user, clientTimezone, accountMap[transaction.AccountId], accountMap[transaction.RelatedAccountId])
 	transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, transactionEditable)
+	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, nil, transactionEditable)
 
 	if !transactionGetReq.TrimAccount {
 		if sourceAccount := accountMap[transaction.AccountId]; sourceAccount != nil {
@@ -1041,6 +1041,13 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		return nil, errs.ErrTransactionHasTooManyPictures
 	}
 
+	inventoryRecordIds, err := utils.StringArrayToInt64Array(transactionCreateReq.InventoryRecordIds)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionCreateHandler] parse inventory record ids failed, because %s", err.Error())
+		return nil, errs.ErrTransactionIdInvalid
+	}
+
 	if transactionCreateReq.Type < models.TRANSACTION_TYPE_MODIFY_BALANCE || transactionCreateReq.Type > models.TRANSACTION_TYPE_TRANSFER {
 		log.Warnf(c, "[transactions.TransactionCreateHandler] transaction type is invalid")
 		return nil, errs.ErrTransactionTypeInvalid
@@ -1076,6 +1083,13 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 	}
 
 	transaction := a.createNewTransactionModel(uid, &transactionCreateReq, c.ClientIP())
+
+	if len(inventoryRecordIds) > 0 {
+		transaction.InventoryRecordId = inventoryRecordIds[0]
+	}
+	if len(inventoryRecordIds) == 0 && transactionCreateReq.InventoryRecordId > 0 {
+		inventoryRecordIds = []int64{transactionCreateReq.InventoryRecordId}
+	}
 
 	allUsedAccounts, err := a.getTransactionUsedAccounts(c, uid, []*models.Transaction{transaction})
 
@@ -1123,7 +1137,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 					return nil, errs.Or(err, errs.ErrOperationFailed)
 				}
 
-				transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+				transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
 				transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 				return transactionResp, nil
@@ -1131,7 +1145,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		}
 	}
 
-	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds)
+	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds, inventoryRecordIds, transactionCreateReq.InventoryRecordAmounts)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, err.Error())
@@ -1140,10 +1154,10 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionCreateHandler] user \"uid:%d\" has created a new transaction \"id:%d\" successfully", uid, transaction.TransactionId)
 
-	a.updateInventoryAfterTransactionCreate(c, uid, transaction)
+	a.updateInventoryAfterTransactionCreate(c, uid, transaction, inventoryRecordIds, transactionCreateReq.InventoryRecordAmounts)
 
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
-	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+	transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
 	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 	return transactionResp, nil
@@ -1350,7 +1364,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
 	newTransaction.Type = transaction.Type
-	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
 	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
 
 	return newTransactionResp, nil
@@ -2087,6 +2101,8 @@ func (a *TransactionsApi) TransactionDeleteHandler(c *core.WebContext) (any, *er
 		return nil, errs.ErrCannotDeleteTransactionWithThisTransactionTime
 	}
 
+	inventoryIndexes, _ := services.TransactionInventoryIndexes.GetInventoryIndexesByTransactionId(c, uid, transactionDeleteReq.Id)
+
 	err = a.transactions.DeleteTransaction(c, uid, transactionDeleteReq.Id)
 
 	if err != nil {
@@ -2096,7 +2112,7 @@ func (a *TransactionsApi) TransactionDeleteHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionDeleteHandler] user \"uid:%d\" has deleted transaction \"id:%d\"", uid, transactionDeleteReq.Id)
 
-	a.reverseInventoryAfterTransactionDelete(c, uid, transaction)
+	a.reverseInventoryAfterTransactionDelete(c, uid, transaction, inventoryIndexes)
 
 	return true, nil
 }
@@ -2887,7 +2903,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 		transactionEditable := transaction.IsEditable(user, clientTimezone, allAccounts[transaction.AccountId], allAccounts[transaction.RelatedAccountId])
 		transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, transactionEditable)
+		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, nil, transactionEditable)
 
 		if !trimAccount {
 			if sourceAccount := allAccounts[transaction.AccountId]; sourceAccount != nil {
@@ -2964,49 +2980,77 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 	return transaction
 	}
 
-func (a *TransactionsApi) updateInventoryAfterTransactionCreate(c core.Context, uid int64, transaction *models.Transaction) {
-	if transaction.InventoryRecordId <= 0 || transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
+func (a *TransactionsApi) updateInventoryAfterTransactionCreate(c core.Context, uid int64, transaction *models.Transaction, inventoryRecordIds []int64, inventoryRecordAmounts []float64) {
+	if transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
 		return
 	}
 
-	delta := transaction.Amount
-	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
-		delta = -delta
+	if len(inventoryRecordIds) == 0 && transaction.InventoryRecordId > 0 {
+		inventoryRecordIds = []int64{transaction.InventoryRecordId}
+		inventoryRecordAmounts = []float64{float64(transaction.Amount)}
 	}
 
+	if len(inventoryRecordIds) == 0 {
+		return
+	}
+
+	isStockOut := transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT
 	newStatus := models.INVENTORY_STATUS_IN_STOCK
-	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
+	if isStockOut {
 		newStatus = models.INVENTORY_STATUS_SOLD_OUT
 	}
 
 	sess := services.InventoryRecords.UserDataDB(uid).NewSession(c)
 	defer sess.Close()
 
-	err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, transaction.InventoryRecordId, float64(delta), newStatus, sess)
-	if err != nil {
-		log.Errorf(c, "[transactions.updateInventoryAfterTransactionCreate] failed to update inventory record \"id:%d\" for transaction \"id:%d\", because %s",
-			transaction.InventoryRecordId, transaction.TransactionId, err.Error())
+	for i, recordId := range inventoryRecordIds {
+		delta := float64(0)
+		if i < len(inventoryRecordAmounts) {
+			delta = inventoryRecordAmounts[i]
+		}
+		if isStockOut {
+			delta = -delta
+		}
+
+		err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, recordId, delta, newStatus, sess)
+		if err != nil {
+			log.Errorf(c, "[transactions.updateInventoryAfterTransactionCreate] failed to update inventory record \"id:%d\" for transaction \"id:%d\", because %s",
+				recordId, transaction.TransactionId, err.Error())
+		}
 	}
 }
 
-func (a *TransactionsApi) reverseInventoryAfterTransactionDelete(c core.Context, uid int64, transaction *models.Transaction) {
-	if transaction.InventoryRecordId <= 0 || transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
+func (a *TransactionsApi) reverseInventoryAfterTransactionDelete(c core.Context, uid int64, transaction *models.Transaction, inventoryIndexes []*models.TransactionInventoryIndex) {
+	if transaction.InventoryAction == models.INVENTORY_ACTION_NONE {
 		return
 	}
 
-	delta := -transaction.Amount
-	if transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT {
-		delta = transaction.Amount
+	if len(inventoryIndexes) == 0 && transaction.InventoryRecordId > 0 {
+		// fallback for old data without join table entries
+		inventoryIndexes = []*models.TransactionInventoryIndex{
+			{InventoryRecordId: transaction.InventoryRecordId, Amount: float64(transaction.Amount)},
+		}
 	}
 
-	newStatus := models.INVENTORY_STATUS_IN_STOCK
+	if len(inventoryIndexes) == 0 {
+		return
+	}
+
+	isStockOut := transaction.InventoryAction == models.INVENTORY_ACTION_STOCK_OUT
 
 	sess := services.InventoryRecords.UserDataDB(uid).NewSession(c)
 	defer sess.Close()
 
-	err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, transaction.InventoryRecordId, float64(delta), newStatus, sess)
-	if err != nil {
-		log.Errorf(c, "[transactions.reverseInventoryAfterTransactionDelete] failed to reverse inventory record \"id:%d\" for transaction \"id:%d\", because %s",
-			transaction.InventoryRecordId, transaction.TransactionId, err.Error())
+	for _, index := range inventoryIndexes {
+		delta := -index.Amount
+		if isStockOut {
+			delta = index.Amount
+		}
+
+		err := services.InventoryRecords.UpdateInventoryQuantity(c, uid, index.InventoryRecordId, delta, models.INVENTORY_STATUS_IN_STOCK, sess)
+		if err != nil {
+			log.Errorf(c, "[transactions.reverseInventoryAfterTransactionDelete] failed to reverse inventory record \"id:%d\" for transaction \"id:%d\", because %s",
+				index.InventoryRecordId, transaction.TransactionId, err.Error())
+		}
 	}
 }
