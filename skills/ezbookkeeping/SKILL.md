@@ -1,9 +1,9 @@
 ---
-name: ezbookkeeping
-description: Use ezBookkeeping API Tools script to record new transactions, query transactions, retrieve account information, retrieve categories, retrieve tags, and retrieve exchange rate data in the self hosted personal finance application ezBookkeeping.
+name: 企业记账
+description: Use 企业记账 API Tools script to record new transactions, query transactions, retrieve account information, retrieve categories, retrieve tags, and retrieve exchange rate data in the self hosted personal finance application 企业记账.
 ---
 
-# ezBookkeeping API Tools
+# 企业记账 API Tools
 
 ## Usage
 
@@ -57,9 +57,9 @@ The meanings of these environment variables are as follows:
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `EBKTOOL_SERVER_BASEURL` | Required | ezBookkeeping server base URL (e.g., `http://localhost:8080`) |
-| `EBKTOOL_TOKEN` | Required | ezBookkeeping API token |
+| `EBKTOOL_SERVER_BASEURL` | Required | 企业记账 server base URL (e.g., `http://localhost:8080`) |
+| `EBKTOOL_TOKEN` | Required | 企业记账 API token |
 
 ## Reference
 
-ezBookkeeping: [https://ezbookkeeping.mayswind.net](https://ezbookkeeping.mayswind.net)
+企业记账: [https://企业记账.mayswind.net](https://企业记账.mayswind.net)

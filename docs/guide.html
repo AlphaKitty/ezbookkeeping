@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>企业记账 - 让经营管理更高效</title>
+<style>
+  @page { margin: 12px; }
+  .section { page-break-inside: avoid; }
+  .intro-card, .step, .faq-item, .toc, .feature-list li { page-break-inside: avoid; }
+  .feature-table tr { page-break-inside: avoid; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: #1a1a2e; background: #f7f8fa; line-height: 1.7;
+  }
+
+  /* ===== Default layout (narrow / mobile / print) ===== */
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; text-align: center; padding: 48px 24px 36px;
+  }
+  .hero h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; letter-spacing: 1px; }
+  .hero p { font-size: .95rem; opacity: .85; max-width: 520px; margin: 0 auto; }
+
+  /* Container */
+  .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
+
+  /* Section */
+  .section { margin: 32px 0; }
+  .section-title {
+    font-size: 1.15rem; font-weight: 700; color: #1a1a2e;
+    padding-bottom: 10px; border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #0f3460; color: #fff; font-size: .85rem; font-weight: 700; flex-shrink: 0;
+  }
+
+  /* Intro cards */
+  .intro-cards { display: flex; gap: 12px; flex-direction: column; }
+  .intro-card {
+    flex: 1; min-width: 0; background: #fff; border-radius: 10px;
+    padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); text-align: center;
+  }
+  .intro-card .icon { font-size: 1.8rem; margin-bottom: 6px; }
+  .intro-card .label { font-weight: 700; color: #0f3460; margin-bottom: 4px; }
+  .intro-card .desc { font-size: .88rem; color: #666; }
+
+  /* Feature table — stacked cards */
+  .feature-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .feature-table, .feature-table thead, .feature-table tbody,
+  .feature-table th, .feature-table td, .feature-table tr { display: block; }
+  .feature-table thead { display: none; }
+  .feature-table tr:first-child td:first-child { border-radius: 10px 10px 0 0; }
+  .feature-table tr:last-child td:last-child { border-radius: 0 0 10px 10px; }
+  .feature-table td {
+    padding: 10px 14px 10px 100px; position: relative;
+    min-height: 44px; font-size: .88rem; background: #fff;
+    border-bottom: 1px solid #f0f0f0; vertical-align: top;
+  }
+  .feature-table td::before {
+    position: absolute; left: 14px; top: 10px; font-weight: 700;
+    font-size: .8rem; color: #0f3460; white-space: nowrap;
+  }
+  .feature-table td:nth-child(1)::before { content: "场景"; }
+  .feature-table td:nth-child(2)::before { content: "现在"; }
+  .feature-table td:nth-child(3)::before { content: "用了之后"; }
+  .feature-table .col-scene { color: #444; }
+  .feature-table .col-before { color: #888; }
+  .feature-table .col-after { color: #1a1a2e; font-weight: 500; }
+
+  /* Feature list */
+  .feature-list { list-style: none; display: grid; gap: 10px; }
+  .feature-list li {
+    background: #fff; border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; align-items: flex-start; gap: 10px;
+  }
+  .feature-list li .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #0f3460;
+    flex-shrink: 0; margin-top: 6px;
+  }
+  .feature-list li strong { display: block; margin-bottom: 2px; font-size: .93rem; }
+  .feature-list li span { color: #666; font-size: .84rem; }
+
+  /* Badge */
+  .badge {
+    display: inline-block; font-size: .7rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; letter-spacing: .5px; vertical-align: middle; margin-left: 4px;
+  }
+  .badge-new { background: #fff3e0; color: #e65100; }
+
+  /* Steps */
+  .steps { display: flex; gap: 12px; flex-direction: column; }
+  .step {
+    flex: 1; min-width: 0; background: #fff; border-radius: 10px;
+    padding: 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    position: relative;
+  }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 50%; background: #e8edf5;
+    color: #0f3460; font-weight: 700; font-size: .95rem; margin-bottom: 8px;
+  }
+  .step .title { font-weight: 700; margin-bottom: 4px; }
+  .step .desc { color: #666; font-size: .84rem; }
+
+  /* FAQ */
+  .faq-list { display: grid; gap: 8px; }
+  .faq-item {
+    background: #fff; border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .faq-item .q { font-weight: 700; margin-bottom: 4px; font-size: .93rem; }
+  .faq-item .a { color: #666; font-size: .88rem; }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 32px 20px; color: #999; font-size: .78rem;
+    border-top: 1px solid #e0e0e0; margin-top: 32px;
+  }
+  .footer a { color: #0f3460; text-decoration: none; }
+
+  /* TOC */
+  .toc {
+    background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .toc-title { font-weight: 700; margin-bottom: 10px; font-size: .95rem; }
+  .toc a { display: block; padding: 5px 0; color: #0f3460; text-decoration: none; font-size: .88rem; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ===== Desktop overrides ===== */
+  @media screen and (min-width: 601px) {
+    .hero { padding: 60px 24px 48px; }
+    .hero h1 { font-size: 2rem; }
+    .hero p { font-size: 1.1rem; }
+    .section { margin: 40px 0; }
+    .section-title { font-size: 1.35rem; padding-bottom: 12px; margin-bottom: 24px; }
+    .section-num { width: 32px; height: 32px; font-size: .9rem; }
+    .container { padding: 0 20px; }
+    .intro-cards { flex-direction: row; gap: 16px; }
+    .intro-card { min-width: 200px; padding: 24px; }
+    .intro-card .icon { font-size: 2rem; }
+    .steps { flex-direction: row; gap: 16px; }
+    .step { min-width: 160px; padding: 24px; }
+    .toc { padding: 24px; }
+
+    /* Table normal */
+    .feature-table, .feature-table thead, .feature-table tbody,
+    .feature-table th, .feature-table td, .feature-table tr { display: revert; }
+    .feature-table thead { display: table-header-group; }
+    .feature-table tr:first-child td:first-child,
+    .feature-table tr:last-child td:last-child { border-radius: 0; }
+    .feature-table tr:first-child th:first-child { border-radius: 10px 0 0 0; }
+    .feature-table tr:first-child th:last-child { border-radius: 0 10px 0 0; }
+    .feature-table tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+    .feature-table tr:last-child td:last-child { border-radius: 0 0 10px 0; }
+    .feature-table th {
+      background: #0f3460; color: #fff; font-weight: 600; font-size: .9rem;
+      padding: 14px 16px; text-align: left;
+    }
+    .feature-table td {
+      padding: 14px 16px; font-size: .9rem; position: static;
+      min-height: auto;
+    }
+    .feature-table td::before { display: none; }
+    .feature-table .col-scene { width: 22%; }
+    .feature-table .col-before { width: 36%; }
+    .feature-table .col-after { width: 42%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+  <h1>企业记账</h1>
+  <p>让经营管理更高效 —— 企业记账与库存管理工具</p>
+</header>
+
+<div class="container">
+
+  <!-- TOC -->
+  <div class="section">
+    <div class="toc">
+      <div class="toc-title">目录</div>
+      <a href="#s1">一、这是什么</a>
+      <a href="#s2">二、让日常记账更高效</a>
+      <a href="#s3">三、库存管理 —— 让进出库更省心 <span class="badge badge-new">即将上线</span></a>
+      <a href="#s4">四、经营分析 —— 打开就知道</a>
+      <a href="#s5">五、更多便捷功能</a>
+      <a href="#s6">六、怎么开始用</a>
+      <a href="#faq">常见问题</a>
+    </div>
+  </div>
+
+  <!-- 一、这是什么 -->
+  <div class="section" id="s1">
+    <h2 class="section-title"><span class="section-num">一</span>这是什么</h2>
+    <div class="intro-cards">
+      <div class="intro-card">
+        <div class="icon">📊</div>
+        <div class="label">高效管钱</div>
+        <div class="desc">收入支出随时记录，多账户统一管理，对账更便捷</div>
+      </div>
+      <div class="intro-card">
+        <div class="icon">📦</div>
+        <div class="label">高效管货</div>
+        <div class="desc">库存进出有记录，实时掌握库存情况<span class="badge badge-new">即将上线</span></div>
+      </div>
+      <div class="intro-card">
+        <div class="icon">📈</div>
+        <div class="label">高效决策</div>
+        <div class="desc">收支分析、经营趋势，打开就能看</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 二、让日常记账更高效 -->
+  <div class="section" id="s2">
+    <h2 class="section-title"><span class="section-num">二</span>让日常记账更高效</h2>
+    <table class="feature-table">
+      <thead>
+        <tr><th class="col-scene">场景</th><th class="col-before">现在</th><th class="col-after">用了之后</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-scene">日常记录</td>
+          <td class="col-before">记一笔账要翻不同地方</td>
+          <td class="col-after">收入、支出、转账，一个入口，几秒完成</td>
+        </tr>
+        <tr>
+          <td class="col-scene">多账户管理</td>
+          <td class="col-before">银行卡、支付宝、微信、现金分散在各处</td>
+          <td class="col-after">所有账户集中管理，每个账户余额一目了然</td>
+        </tr>
+        <tr>
+          <td class="col-scene">分类查看</td>
+          <td class="col-before">想分类看收支不太方便</td>
+          <td class="col-after">按租金、工资、物料等分类，想看哪类看哪类</td>
+        </tr>
+        <tr>
+          <td class="col-scene">账单导入</td>
+          <td class="col-before">银行流水、支付宝微信账单需要手工整理</td>
+          <td class="col-after">直接导入，省去手工录入时间</td>
+        </tr>
+        <tr>
+          <td class="col-scene">定期项目</td>
+          <td class="col-before">租金、工资、贷款每月固定，每次都要重新记</td>
+          <td class="col-after">设一次自动记账，每月不用再手动操作</td>
+        </tr>
+        <tr>
+          <td class="col-scene">对账</td>
+          <td class="col-before">需要花时间逐条核对</td>
+          <td class="col-after">一键完成，省时省力</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 三、库存管理 -->
+  <div class="section" id="s3">
+    <h2 class="section-title">
+      <span class="section-num">三</span>库存管理 —— 让进出库更省心
+      <span class="badge badge-new">即将上线</span>
+    </h2>
+    <table class="feature-table">
+      <thead>
+        <tr><th class="col-scene">场景</th><th class="col-before">现在</th><th class="col-after">用了之后</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-scene">货品档案</td>
+          <td class="col-before">物品信息记在各处，查找不便</td>
+          <td class="col-after">统一建档，名称、规格、单位、分类清晰可查</td>
+        </tr>
+        <tr>
+          <td class="col-scene">进出库记录</td>
+          <td class="col-before">进货、出货、消耗需要多处记录</td>
+          <td class="col-after">一个入口记录所有变动，实时查看当前库存</td>
+        </tr>
+        <tr>
+          <td class="col-scene">记账同步库存</td>
+          <td class="col-before">销售记账后还要单独更新库存</td>
+          <td class="col-after">记一笔销售账，库存自动同步更新，不用重复操作</td>
+        </tr>
+        <tr>
+          <td class="col-scene">进价售价管理</td>
+          <td class="col-before">进价和售价分开算比较麻烦</td>
+          <td class="col-after">进价售价分开管理，利润情况清晰可见</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 四、经营分析 -->
+  <div class="section" id="s4">
+    <h2 class="section-title"><span class="section-num">四</span>经营分析 —— 打开就知道</h2>
+    <table class="feature-table">
+      <thead>
+        <tr><th class="col-scene" style="width:28%">场景</th><th style="width:72%">说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-scene">首页看板</td>
+          <td class="col-after">打开首页就能看到：本月收入、支出、结余、各账户余额，经营状况随时掌握</td>
+        </tr>
+        <tr>
+          <td class="col-scene">图表分析</td>
+          <td class="col-after">饼图、趋势图直观展示收入来源和支出去向，一眼看懂经营动态</td>
+        </tr>
+        <tr>
+          <td class="col-scene">自定义查看</td>
+          <td class="col-after">想按自己的方式看数据，自由组合分析维度</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 五、更多便捷功能 -->
+  <div class="section" id="s5">
+    <h2 class="section-title"><span class="section-num">五</span>更多便捷功能</h2>
+    <ul class="feature-list">
+      <li>
+        <span class="dot"></span>
+        <div><strong>拍小票记账</strong><br><span>收到发票或小票，拍张照片，自动识别金额和内容，省去手动输入</span></div>
+      </li>
+      <li>
+        <span class="dot"></span>
+        <div><strong>手机电脑都能用</strong><br><span>在办公室用电脑，出门用手机，数据实时同步</span></div>
+      </li>
+      <li>
+        <span class="dot"></span>
+        <div><strong>多人协作</strong><br><span>可以给同事开账号，各管各的范围</span></div>
+      </li>
+      <li>
+        <span class="dot"></span>
+        <div><strong>数据自主可控</strong><br><span>部署在自有设备上，数据不外流</span></div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- 六、怎么开始用 -->
+  <div class="section" id="s6">
+    <h2 class="section-title"><span class="section-num">六</span>怎么开始用</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="title">注册账号</div>
+        <div class="desc">打开网页，填写邮箱和密码即可</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="title">开始使用</div>
+        <div class="desc">点"记一笔"，输入金额、选分类，几秒完成第一笔账</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="section" id="faq">
+    <h2 class="section-title"><span class="section-num">?</span>常见问题</h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="q">数据放在哪里？</div>
+        <div class="a">部署在自有服务器上，数据完全自主掌控。</div>
+      </div>
+      <div class="faq-item">
+        <div class="q">能否导入微信、支付宝账单？</div>
+        <div class="a">可以，支持直接导入，省去手工录入时间。</div>
+      </div>
+      <div class="faq-item">
+        <div class="q">忘记密码怎么办？</div>
+        <div class="a">通过邮箱即可重置密码。</div>
+      </div>
+      <div class="faq-item">
+        <div class="q">能不能多人使用？</div>
+        <div class="a">可以，每人独立账号，各管各的范围。</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  企业记账 &middot; 开源企业记账与库存管理工具
+</footer>
+
+</body>
+</html>

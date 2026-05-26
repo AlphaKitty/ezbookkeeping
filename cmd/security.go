@@ -12,7 +12,7 @@ import (
 // SecurityUtils represents the security command
 var SecurityUtils = &cli.Command{
 	Name:  "security",
-	Usage: "ezBookkeeping security utilities",
+	Usage: "企业记账 security utilities",
 	Commands: []*cli.Command{
 		{
 			Name:   "gen-secret-key",

@@ -13,7 +13,7 @@ import (
 // CronJobs represents the cron command
 var CronJobs = &cli.Command{
 	Name:  "cron",
-	Usage: "ezBookkeeping cron job utilities",
+	Usage: "企业记账 cron job utilities",
 	Commands: []*cli.Command{
 		{
 			Name:   "list",

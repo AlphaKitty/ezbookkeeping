@@ -50,7 +50,7 @@ func (h *mcpAddTransactionToolHandler) Name() string {
 
 // Description returns the description of the MCP tool
 func (h *mcpAddTransactionToolHandler) Description() string {
-	return "Add a new transaction in ezBookkeeping."
+	return "Add a new transaction in 企业记账."
 }
 
 // InputType returns the input type for the MCP tool request

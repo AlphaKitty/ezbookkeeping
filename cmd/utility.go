@@ -17,7 +17,7 @@ import (
 // Utilities represents the utilities command
 var Utilities = &cli.Command{
 	Name:  "utility",
-	Usage: "ezBookkeeping utilities",
+	Usage: "企业记账 utilities",
 	Commands: []*cli.Command{
 		{
 			Name:   "parse-default-request-id",
@@ -89,7 +89,7 @@ func sendTestMail(c *core.CliContext) error {
 
 	err = mail.Container.SendMail(&mail.MailMessage{
 		To:      toAddress,
-		Subject: "ezBookkeeping test e-mail",
+		Subject: "企业记账 test e-mail",
 		Body:    "This is a test e-mail",
 	})
 
