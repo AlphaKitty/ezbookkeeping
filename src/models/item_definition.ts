@@ -20,7 +20,8 @@ export interface ItemDefinitionCreateRequest {
     readonly name: string;
     readonly icon: string;
     readonly fieldSchema: ItemFieldSchema;
-    readonly pricingExpr: string;
+    readonly expensePricingExpr: string;
+    readonly incomePricingExpr: string;
     readonly incomeCategoryId: string;
     readonly expenseCategoryId: string;
 }
@@ -30,7 +31,8 @@ export interface ItemDefinitionModifyRequest {
     readonly name: string;
     readonly icon: string;
     readonly fieldSchema: ItemFieldSchema;
-    readonly pricingExpr: string;
+    readonly expensePricingExpr: string;
+    readonly incomePricingExpr: string;
     readonly incomeCategoryId: string;
     readonly expenseCategoryId: string;
 }
@@ -44,7 +46,8 @@ export interface ItemDefinitionInfoResponse {
     readonly name: string;
     readonly icon: string;
     readonly fieldSchema: ItemFieldSchema | null;
-    readonly pricingExpr: string;
+    readonly expensePricingExpr: string;
+    readonly incomePricingExpr: string;
     readonly incomeCategoryId: string;
     readonly expenseCategoryId: string;
 }

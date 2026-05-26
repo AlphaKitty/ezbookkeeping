@@ -561,6 +561,65 @@
                           :navbar-show-count="true" :exposition="false"
                           :photos="transactionPictures" :thumbs="transactionThumbs" />
         <input ref="pictureInput" type="file" style="display: none" :accept="`${SUPPORTED_IMAGE_EXTENSIONS};capture=camera`" @change="uploadPicture($event)" />
+
+        <!-- Inventory Record Edit Popup -->
+        <f7-popup push :close-on-escape="false" :opened="showInventoryEditPopup" @popup:closed="showInventoryEditPopup = false">
+            <f7-page>
+                <f7-navbar>
+                    <f7-nav-left>
+                        <f7-link popup-close icon-f7="xmark"></f7-link>
+                    </f7-nav-left>
+                    <f7-nav-title>{{ tt('Edit Inventory Record') }}</f7-nav-title>
+                    <f7-nav-right>
+                        <f7-link icon-f7="checkmark_alt" :class="{ 'disabled': inventoryEditSaving }" @click="onInventoryEditSave"></f7-link>
+                    </f7-nav-right>
+                </f7-navbar>
+
+                <template v-if="inventoryEditCurrentItemDef?.fieldSchema?.fields?.length">
+                    <f7-block-title class="margin-top">{{ inventoryEditCurrentItemDef.name }}</f7-block-title>
+                    <f7-list strong inset>
+                        <template v-for="field in inventoryEditCurrentItemDef.fieldSchema.fields" :key="field.key">
+                            <f7-list-input v-if="field.fieldType === 'number'"
+                                :label="field.key"
+                                :suffix="field.unit || ''"
+                                type="number"
+                                required
+                                :validate="field.required"
+                                :clear-button="true"
+                                v-model="inventoryEditFieldValues[field.key]">
+                            </f7-list-input>
+                            <f7-list-input v-else-if="field.fieldType === 'text'"
+                                :label="field.key"
+                                type="text"
+                                required
+                                :validate="field.required"
+                                :clear-button="true"
+                                v-model="inventoryEditFieldValues[field.key]">
+                            </f7-list-input>
+                            <f7-list-input v-else-if="field.fieldType === 'enum'"
+                                :label="field.key"
+                                type="text"
+                                required
+                                :validate="field.required"
+                                :clear-button="true"
+                                v-model="inventoryEditFieldValues[field.key]">
+                            </f7-list-input>
+                            <f7-list-input v-else-if="field.fieldType === 'date'"
+                                :label="field.key"
+                                :type="(field as any).format === 'YYYY-MM-DD HH:mm:ss' ? 'datetime-local' : 'date'"
+                                required
+                                :validate="field.required"
+                                :clear-button="true"
+                                v-model="inventoryEditFieldValues[field.key]">
+                            </f7-list-input>
+                        </template>
+                    </f7-list>
+                </template>
+                <f7-list strong inset v-if="inventoryEditCurrentItemDef && !inventoryEditCurrentItemDef?.fieldSchema?.fields?.length">
+                    <f7-list-item :title="tt('This item type has no custom fields defined')" />
+                </f7-list>
+            </f7-page>
+        </f7-popup>
     </f7-page>
 </template>
 
@@ -736,6 +795,11 @@ const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
 const selectedInventoryRecordIds = ref<string[]>([]);
 const inventoryRecordsLoaded = ref(false);
 const showInventoryRecordPopup = ref(false);
+const showInventoryEditPopup = ref(false);
+const editingInventoryRecord = ref<InventoryRecordInfoResponse | null>(null);
+const inventoryEditFieldValues = ref<Record<string, any>>({});
+const inventoryEditCurrentItemDef = ref<ItemDefinitionInfoResponse | null>(null);
+const inventoryEditSaving = ref(false);
 
 const quickSaveButtonStyleType = computed<number>(() => settingsStore.appSettings.quickSaveButtonStyleInMobileTransactionListPage);
 const quickSaveButtonFloatingPosition = computed<string>(() => {
@@ -946,10 +1010,16 @@ const availableInventoryRecordOptions = computed(() =>
     inventoryRecordOptions.value.filter(o => !selectedInventoryRecordIds.value.includes(o.id))
 );
 
+function getPricingExpr(def: ItemDefinitionInfoResponse): string {
+    if (transaction.value.type === TransactionType.Expense) return def.expensePricingExpr;
+    if (transaction.value.type === TransactionType.Income) return def.incomePricingExpr;
+    return '';
+}
+
 const hasInventoryPricingExpr = computed(() => {
     for (const recordId of selectedInventoryRecordIds.value) {
         const def = getSelectedRecordItemDef(recordId);
-        if (def?.pricingExpr) return true;
+        if (def && getPricingExpr(def)) return true;
     }
     return false;
 });
@@ -1047,8 +1117,71 @@ function getInventoryRecordName(recordId: string): string {
     return opt?.name || `#${recordId}`;
 }
 
-function goToInventoryRecord(_recordId: string) {
-    props.f7router.navigate('/inventory/records');
+async function goToInventoryRecord(recordId: string) {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return;
+    editingInventoryRecord.value = record;
+    inventoryEditFieldValues.value = record.fieldValues?.values ? { ...record.fieldValues.values } : {};
+
+    let def = inventoryItemDefs.value.find(d => d.id === record.itemDefinitionId);
+    if (!def) {
+        try {
+            const resp = await api.getItemDefinition({ id: record.itemDefinitionId });
+            def = resp.data.result;
+            inventoryItemDefs.value.push(def);
+        } catch {
+            showToast(tt('Failed to load item definition'));
+            return;
+        }
+    }
+    inventoryEditCurrentItemDef.value = def;
+    showInventoryEditPopup.value = true;
+}
+
+async function onInventoryEditSave() {
+    const itemDef = inventoryEditCurrentItemDef.value;
+    const record = editingInventoryRecord.value;
+    if (!record) return;
+
+    inventoryEditSaving.value = true;
+    try {
+        const fieldValuesPayload = itemDef?.fieldSchema?.fields?.length
+            ? { values: { ...inventoryEditFieldValues.value } }
+            : null;
+
+        await api.modifyInventoryRecord({
+            id: record.id,
+            itemDefinitionId: record.itemDefinitionId,
+            warehouseId: record.warehouseId,
+            fieldValues: fieldValuesPayload,
+            quantity: record.quantity,
+            unit: record.unit,
+            unitPrice: record.unitPrice,
+            transporter: record.transporter,
+            batchNo: record.batchNo,
+            status: record.status,
+            comment: record.comment,
+        });
+
+        const updatedResp = await api.getInventoryRecord({ id: record.id });
+        const updated = updatedResp.data.result;
+        const idx = inventoryRecords.value.findIndex(r => r.id === record.id);
+        if (idx >= 0) {
+            inventoryRecords.value[idx] = updated;
+        }
+
+        showInventoryEditPopup.value = false;
+
+        if (selectedInventoryRecordIds.value.includes(record.id)) {
+            recalcInventoryAmount();
+        }
+    } catch (error: any) {
+        if (!error.processed) {
+            showToast(error.message || tt('Save failed'));
+        }
+    } finally {
+        inventoryEditSaving.value = false;
+    }
 }
 
 function applyCategoryFromSelectedRecords() {
@@ -1087,10 +1220,12 @@ function recalcInventoryAmount() {
         if (!record) continue;
 
         const def = getSelectedRecordItemDef(recordId);
-        if (!def?.pricingExpr) continue;
+        if (!def) continue;
+        const expr = getPricingExpr(def);
+        if (!expr) continue;
 
         const fieldValues = record.fieldValues?.values || {};
-        let substituted = def.pricingExpr;
+        let substituted = expr;
         let allFieldsFilled = true;
 
         for (const field of def.fieldSchema?.fields || []) {
@@ -1141,6 +1276,8 @@ function getQueryTransactionOptions(): SetTransactionOptions {
 watch(() => transaction.value.type, (newType) => {
     if (linkInventory.value && (newType === TransactionType.Transfer || newType === TransactionType.ModifyBalance)) {
         resetInventoryState();
+    } else if (linkInventory.value && (newType === TransactionType.Expense || newType === TransactionType.Income)) {
+        recalcInventoryAmount();
     }
 });
 
@@ -1376,9 +1513,11 @@ function save(afterAction: AfterSaveAction): void {
                     const record = inventoryRecords.value.find(r => r.id === recordId);
                     if (!record) { amounts.push(0); continue; }
                     const def = getSelectedRecordItemDef(recordId);
-                    if (!def?.pricingExpr) { amounts.push(0); continue; }
+                    if (!def) { amounts.push(0); continue; }
+                    const expr = getPricingExpr(def);
+                    if (!expr) { amounts.push(0); continue; }
                     const fieldValues = record.fieldValues?.values || {};
-                    let substituted = def.pricingExpr;
+                    let substituted = expr;
                     let allFilled = true;
                     for (const field of def.fieldSchema?.fields || []) {
                         const val = fieldValues[field.key];

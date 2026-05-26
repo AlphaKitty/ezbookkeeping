@@ -75,7 +75,8 @@ func (s *ItemDefinitionService) CreateItemDefinition(c core.Context, uid int64, 
 		Name:              request.Name,
 		Icon:              request.Icon,
 		FieldSchema:       request.FieldSchema,
-		PricingExpr:       request.PricingExpr,
+		ExpensePricingExpr: request.ExpensePricingExpr,
+		IncomePricingExpr:  request.IncomePricingExpr,
 		IncomeCategoryId:  request.IncomeCategoryId,
 		ExpenseCategoryId: request.ExpenseCategoryId,
 		CreatedUnixTime:   now,
@@ -104,12 +105,13 @@ func (s *ItemDefinitionService) ModifyItemDefinition(c core.Context, uid int64, 
 	definition.Name = request.Name
 	definition.Icon = request.Icon
 	definition.FieldSchema = request.FieldSchema
-	definition.PricingExpr = request.PricingExpr
+	definition.ExpensePricingExpr = request.ExpensePricingExpr
+	definition.IncomePricingExpr = request.IncomePricingExpr
 	definition.IncomeCategoryId = request.IncomeCategoryId
 	definition.ExpenseCategoryId = request.ExpenseCategoryId
 	definition.UpdatedUnixTime = time.Now().Unix()
 
-	_, err = s.UserDataDB(uid).NewSession(c).ID(definition.ItemDefinitionId).Cols("name", "icon", "field_schema", "pricing_expr", "income_category_id", "expense_category_id", "updated_unix_time").Update(definition)
+	_, err = s.UserDataDB(uid).NewSession(c).ID(definition.ItemDefinitionId).Cols("name", "icon", "field_schema", "expense_pricing_expr", "income_pricing_expr", "income_category_id", "expense_category_id", "updated_unix_time").Update(definition)
 
 	return definition, err
 }

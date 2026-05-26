@@ -8,11 +8,13 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/datastore"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
 // TransactionInventoryService represents transaction inventory index service
 type TransactionInventoryService struct {
 	ServiceUsingDB
+	ServiceUsingUuid
 }
 
 // Initialize a transaction inventory service singleton instance
@@ -20,6 +22,9 @@ var (
 	TransactionInventoryIndexes = &TransactionInventoryService{
 		ServiceUsingDB: ServiceUsingDB{
 			container: datastore.Container,
+		},
+		ServiceUsingUuid: ServiceUsingUuid{
+			container: uuid.Container,
 		},
 	}
 )
@@ -32,9 +37,15 @@ func (s *TransactionInventoryService) CreateInventoryIndexes(c core.Context, uid
 		n = len(amounts)
 	}
 
+	indexUuids := s.GenerateUuids(uuid.UUID_TYPE_INVENTORY_INDEX, uint16(n))
+	if len(indexUuids) < n {
+		return nil // not enough UUIDs, skip
+	}
+
 	indexes := make([]*models.TransactionInventoryIndex, 0, n)
 	for i := 0; i < n; i++ {
 		indexes = append(indexes, &models.TransactionInventoryIndex{
+			IndexId:           indexUuids[i],
 			Uid:               uid,
 			Deleted:           false,
 			TransactionTime:   transactionTime,

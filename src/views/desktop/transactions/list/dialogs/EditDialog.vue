@@ -483,6 +483,55 @@
         </v-card>
     </v-dialog>
 
+    <!-- Inventory Record Edit Dialog -->
+    <v-dialog v-model="showInventoryEditDialog" width="640" persistent>
+        <v-card class="pa-sm-1 pa-md-2">
+            <template #title>
+                <h4 class="text-h4">{{ tt('Edit Inventory Record') }}</h4>
+            </template>
+            <v-card-text>
+                <template v-if="inventoryEditCurrentItemDef?.fieldSchema?.fields?.length">
+                    <div class="text-subtitle-2 mb-3">{{ inventoryEditCurrentItemDef.name }}</div>
+                    <v-row>
+                        <v-col v-for="field in inventoryEditCurrentItemDef.fieldSchema.fields" :key="field.key" cols="12" :md="field.fieldType === 'text' ? 12 : 6">
+                            <v-text-field v-if="field.fieldType === 'number'"
+                                v-model.number="inventoryEditFieldValues[field.key]"
+                                :label="field.key"
+                                :suffix="field.unit"
+                                type="number"
+                                density="compact" variant="outlined"
+                                :rules="field.required ? [required] : []"/>
+                            <v-text-field v-else-if="field.fieldType === 'text'"
+                                v-model="inventoryEditFieldValues[field.key]"
+                                :label="field.key"
+                                density="compact" variant="outlined"
+                                :rules="field.required ? [required] : []"/>
+                            <v-select v-else-if="field.fieldType === 'enum'"
+                                v-model="inventoryEditFieldValues[field.key]"
+                                :label="field.key"
+                                :items="(field as any).options || []"
+                                density="compact" variant="outlined"
+                                :rules="field.required ? [required] : []"/>
+                            <v-text-field v-else-if="field.fieldType === 'date'"
+                                v-model="inventoryEditFieldValues[field.key]"
+                                :label="field.key"
+                                :type="(field as any).format === 'YYYY-MM-DD HH:mm:ss' ? 'datetime-local' : 'date'"
+                                density="compact" variant="outlined"
+                                :rules="field.required ? [required] : []"/>
+                        </v-col>
+                    </v-row>
+                </template>
+                <p v-else class="text-caption text-disabled mt-4">{{ tt('This item type has no custom fields defined') }}</p>
+                <v-alert v-if="inventoryEditFormError" type="error" variant="tonal" density="compact" class="mt-4" closable @click:close="inventoryEditFormError = ''">{{ inventoryEditFormError }}</v-alert>
+            </v-card-text>
+            <v-card-actions>
+                <v-spacer/>
+                <v-btn variant="text" @click="showInventoryEditDialog = false">{{ tt('Cancel') }}</v-btn>
+                <v-btn color="primary" variant="tonal" :loading="inventoryEditSaving" @click="onInventoryEditSave">{{ tt('Save') }}</v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
     <confirm-dialog ref="confirmDialog"/>
     <snack-bar ref="snackbar" />
     <input ref="pictureInput" type="file" style="display: none" :accept="SUPPORTED_IMAGE_EXTENSIONS" @change="uploadPicture($event)" />
@@ -665,6 +714,13 @@ const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
 const selectedInventoryRecordIds = ref<string[]>([]);
 const inventoryRecordsLoaded = ref(false);
 
+const showInventoryEditDialog = ref(false);
+const editingInventoryRecord = ref<InventoryRecordInfoResponse | null>(null);
+const inventoryEditFieldValues = ref<Record<string, any>>({});
+const inventoryEditCurrentItemDef = ref<ItemDefinitionInfoResponse | null>(null);
+const inventoryEditSaving = ref(false);
+const inventoryEditFormError = ref('');
+
 const inventoryRecordOptions = computed(() => {
     const sorted = [...inventoryRecords.value].sort((a, b) => b.createdUnixTime - a.createdUnixTime);
     return sorted.map(r => {
@@ -723,10 +779,16 @@ const incomeCategoryLocked = computed(() => {
     return false;
 });
 
+function getPricingExpr(def: ItemDefinitionInfoResponse): string {
+    if (transaction.value.type === TransactionType.Expense) return def.expensePricingExpr;
+    if (transaction.value.type === TransactionType.Income) return def.incomePricingExpr;
+    return '';
+}
+
 const hasInventoryPricingExpr = computed(() => {
     for (const recordId of selectedInventoryRecordIds.value) {
         const def = getSelectedRecordItemDef(recordId);
-        if (def?.pricingExpr) return true;
+        if (def && getPricingExpr(def)) return true;
     }
     return false;
 });
@@ -759,6 +821,7 @@ const isTransactionModified = computed<boolean>(() => {
 function open(options: TransactionEditOptions): Promise<TransactionEditResponse | undefined> {
     addByTemplateId.value = null;
     duplicateFromId.value = null;
+    resetInventoryState();
     showState.value = true;
     activeTab.value = 'basicInfo';
     loading.value = true;
@@ -977,10 +1040,12 @@ function recalcInventoryAmount() {
         if (!record) continue;
 
         const def = getSelectedRecordItemDef(recordId);
-        if (!def?.pricingExpr) continue;
+        if (!def) continue;
+        const expr = getPricingExpr(def);
+        if (!expr) continue;
 
         const fieldValues = record.fieldValues?.values || {};
-        let substituted = def.pricingExpr;
+        let substituted = expr;
         let allFieldsFilled = true;
 
         for (const field of def.fieldSchema?.fields || []) {
@@ -1095,9 +1160,11 @@ function save(afterAction: AfterSaveAction): void {
                     const record = inventoryRecords.value.find(r => r.id === recordId);
                     if (!record) { amounts.push(0); continue; }
                     const def = getSelectedRecordItemDef(recordId);
-                    if (!def?.pricingExpr) { amounts.push(0); continue; }
+                    if (!def) { amounts.push(0); continue; }
+                    const expr = getPricingExpr(def);
+                    if (!expr) { amounts.push(0); continue; }
                     const fieldValues = record.fieldValues?.values || {};
-                    let substituted = def.pricingExpr;
+                    let substituted = expr;
                     let allFilled = true;
                     for (const field of def.fieldSchema?.fields || []) {
                         const val = fieldValues[field.key];
@@ -1401,8 +1468,89 @@ function removeSelectedInventoryRecord(recordId: string) {
     recalcInventoryAmount();
 }
 
-function goToInventoryRecord(_recordId: string) {
-    window.open(`${window.location.origin}${window.location.pathname}#/inventory/records`, '_blank');
+function required(v: any): true | string {
+    if (v === null || v === undefined || v === '') return tt('Required');
+    if (typeof v === 'number' && isNaN(v)) return tt('Required');
+    return true;
+}
+
+async function goToInventoryRecord(recordId: string) {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return;
+    editingInventoryRecord.value = record;
+    inventoryEditFieldValues.value = record.fieldValues?.values ? { ...record.fieldValues.values } : {};
+    inventoryEditFormError.value = '';
+
+    let def = inventoryItemDefs.value.find(d => d.id === record.itemDefinitionId);
+    if (!def) {
+        try {
+            const resp = await api.getItemDefinition({ id: record.itemDefinitionId });
+            def = resp.data.result;
+            inventoryItemDefs.value.push(def);
+        } catch {
+            inventoryEditFormError.value = tt('Failed to load item definition');
+            return;
+        }
+    }
+    inventoryEditCurrentItemDef.value = def;
+    showInventoryEditDialog.value = true;
+}
+
+async function onInventoryEditSave() {
+    const itemDef = inventoryEditCurrentItemDef.value;
+    if (itemDef?.fieldSchema?.fields?.length) {
+        for (const field of itemDef.fieldSchema.fields) {
+            if (!field.required) continue;
+            const v = inventoryEditFieldValues.value[field.key];
+            if (v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v))) {
+                inventoryEditFormError.value = `${tt('Required')}: ${field.key}`;
+                return;
+            }
+        }
+    }
+
+    const record = editingInventoryRecord.value;
+    if (!record) return;
+
+    inventoryEditSaving.value = true;
+    try {
+        const fieldValuesPayload = itemDef?.fieldSchema?.fields?.length
+            ? { values: { ...inventoryEditFieldValues.value } }
+            : null;
+
+        await api.modifyInventoryRecord({
+            id: record.id,
+            itemDefinitionId: record.itemDefinitionId,
+            warehouseId: record.warehouseId,
+            fieldValues: fieldValuesPayload,
+            quantity: record.quantity,
+            unit: record.unit,
+            unitPrice: record.unitPrice,
+            transporter: record.transporter,
+            batchNo: record.batchNo,
+            status: record.status,
+            comment: record.comment,
+        });
+
+        const updatedResp = await api.getInventoryRecord({ id: record.id });
+        const updated = updatedResp.data.result;
+        const idx = inventoryRecords.value.findIndex(r => r.id === record.id);
+        if (idx >= 0) {
+            inventoryRecords.value[idx] = updated;
+        }
+
+        showInventoryEditDialog.value = false;
+
+        if (selectedInventoryRecordIds.value.includes(record.id)) {
+            recalcInventoryAmount();
+        }
+    } catch (error: any) {
+        if (!error.processed) {
+            inventoryEditFormError.value = error.message || tt('Save failed');
+        }
+    } finally {
+        inventoryEditSaving.value = false;
+    }
 }
 
 function onShowDateTimeError(error: string): void {
@@ -1414,6 +1562,12 @@ watch(activeTab, (newValue) => {
         nextTick(() => {
             map.value?.initMapView();
         });
+    }
+});
+
+watch(() => transaction.value.type, (newType) => {
+    if (linkInventory.value && (newType === TransactionType.Expense || newType === TransactionType.Income)) {
+        recalcInventoryAmount();
     }
 });
 

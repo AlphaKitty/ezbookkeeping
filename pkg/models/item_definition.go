@@ -50,7 +50,8 @@ type ItemDefinition struct {
 	Name             string           `xorm:"VARCHAR(64) NOT NULL"`
 	Icon             string           `xorm:"VARCHAR(64) NOT NULL"`
 	FieldSchema      *ItemFieldSchema `xorm:"BLOB"`
-	PricingExpr      string           `xorm:"VARCHAR(255) NOT NULL DEFAULT ''"`
+	ExpensePricingExpr string           `xorm:"VARCHAR(255) NOT NULL DEFAULT ''"`
+	IncomePricingExpr  string           `xorm:"VARCHAR(255) NOT NULL DEFAULT ''"`
 	IncomeCategoryId int64            `xorm:"NOT NULL DEFAULT 0"`
 	ExpenseCategoryId int64            `xorm:"NOT NULL DEFAULT 0"`
 	CreatedUnixTime  int64
@@ -63,20 +64,22 @@ type ItemDefinitionCreateRequest struct {
 	Name             string           `json:"name" binding:"required,notBlank,max=64"`
 	Icon             string           `json:"icon" binding:"max=64"`
 	FieldSchema      *ItemFieldSchema `json:"fieldSchema" binding:"required"`
-	PricingExpr      string           `json:"pricingExpr" binding:"max=255"`
-	IncomeCategoryId int64            `json:"incomeCategoryId,string" binding:"required,min=1"`
-	ExpenseCategoryId int64            `json:"expenseCategoryId,string" binding:"required,min=1"`
+	ExpensePricingExpr string           `json:"expensePricingExpr" binding:"max=255"`
+	IncomePricingExpr  string           `json:"incomePricingExpr" binding:"max=255"`
+	IncomeCategoryId   int64            `json:"incomeCategoryId,string" binding:"required,min=1"`
+	ExpenseCategoryId  int64            `json:"expenseCategoryId,string" binding:"required,min=1"`
 }
 
 // ItemDefinitionModifyRequest represents all parameters of item definition modification request
 type ItemDefinitionModifyRequest struct {
-	Id               int64            `json:"id,string" binding:"required,min=1"`
-	Name             string           `json:"name" binding:"required,notBlank,max=64"`
-	Icon             string           `json:"icon" binding:"max=64"`
-	FieldSchema      *ItemFieldSchema `json:"fieldSchema" binding:"required"`
-	PricingExpr      string           `json:"pricingExpr" binding:"max=255"`
-	IncomeCategoryId int64            `json:"incomeCategoryId,string" binding:"required,min=1"`
-	ExpenseCategoryId int64            `json:"expenseCategoryId,string" binding:"required,min=1"`
+	Id                 int64            `json:"id,string" binding:"required,min=1"`
+	Name               string           `json:"name" binding:"required,notBlank,max=64"`
+	Icon               string           `json:"icon" binding:"max=64"`
+	FieldSchema        *ItemFieldSchema `json:"fieldSchema" binding:"required"`
+	ExpensePricingExpr string           `json:"expensePricingExpr" binding:"max=255"`
+	IncomePricingExpr  string           `json:"incomePricingExpr" binding:"max=255"`
+	IncomeCategoryId   int64            `json:"incomeCategoryId,string" binding:"required,min=1"`
+	ExpenseCategoryId  int64            `json:"expenseCategoryId,string" binding:"required,min=1"`
 }
 
 // ItemDefinitionGetRequest represents all parameters of item definition getting request
@@ -95,7 +98,8 @@ type ItemDefinitionInfoResponse struct {
 	Name             string           `json:"name"`
 	Icon             string           `json:"icon"`
 	FieldSchema      *ItemFieldSchema `json:"fieldSchema"`
-	PricingExpr      string           `json:"pricingExpr"`
+	ExpensePricingExpr string           `json:"expensePricingExpr"`
+	IncomePricingExpr  string           `json:"incomePricingExpr"`
 	IncomeCategoryId int64            `json:"incomeCategoryId,string"`
 	ExpenseCategoryId int64            `json:"expenseCategoryId,string"`
 }
@@ -107,7 +111,8 @@ func (d *ItemDefinition) ToItemDefinitionInfoResponse() *ItemDefinitionInfoRespo
 		Name:             d.Name,
 		Icon:             d.Icon,
 		FieldSchema:      d.FieldSchema,
-		PricingExpr:      d.PricingExpr,
+		ExpensePricingExpr: d.ExpensePricingExpr,
+			IncomePricingExpr:  d.IncomePricingExpr,
 		IncomeCategoryId: d.IncomeCategoryId,
 		ExpenseCategoryId: d.ExpenseCategoryId,
 	}

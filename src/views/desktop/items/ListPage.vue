@@ -25,7 +25,10 @@
                         {{ item.fieldSchema?.fields?.length || 0 }}
                     </template>
                     <template #item.pricingExpr="{ item }">
-                        <code v-if="item.pricingExpr" class="text-caption">{{ item.pricingExpr }}</code>
+                        <div v-if="item.expensePricingExpr || item.incomePricingExpr" class="text-caption">
+                            <div v-if="item.expensePricingExpr"><v-icon :icon="mdiArrowDown" size="12"/> <code>{{ item.expensePricingExpr }}</code></div>
+                            <div v-if="item.incomePricingExpr"><v-icon :icon="mdiArrowUp" size="12"/> <code>{{ item.incomePricingExpr }}</code></div>
+                        </div>
                         <span v-else class="text-caption text-disabled">--</span>
                     </template>
                     <template #item.actions="{ item }">
@@ -62,15 +65,23 @@
                     </v-col>
                 </v-row>
 
-                <div class="text-subtitle-2 mb-2 mt-4">{{ tt('Pricing Expression') }}</div>
-                <v-text-field v-model="form.pricingExpr" :placeholder="tt('Pricing Expression (e.g. weight * unit_price)')" density="compact" variant="outlined" class="mb-2"/>
-                <div class="mb-4">
-                    <span class="text-caption text-disabled me-2" v-if="validFieldKeys.length">{{ tt('Select field to insert into expression') }}:</span>
-                    <v-chip v-for="key in validFieldKeys" :key="key" density="compact" size="small" class="me-1 mb-1" @click="insertFieldKey(key)">
+                <div class="text-subtitle-2 mb-2 mt-4">{{ tt('Expense Pricing Expression') }}</div>
+                <v-text-field v-model="form.expensePricingExpr" :placeholder="tt('e.g. weight * buy_price')" density="compact" variant="outlined" class="mb-1"/>
+                <div class="mb-2">
+                    <v-chip v-for="key in validFieldKeys" :key="'exp_' + key" density="compact" size="small" class="me-1 mb-1" @click="insertExpenseFieldKey(key)">
                         {{ key }}
                     </v-chip>
-                    <span v-if="!validFieldKeys.length" class="text-caption text-disabled">{{ tt('Add fields below to use in pricing expression') }}</span>
                 </div>
+
+                <div class="text-subtitle-2 mb-2 mt-4">{{ tt('Income Pricing Expression') }}</div>
+                <v-text-field v-model="form.incomePricingExpr" :placeholder="tt('e.g. weight * sell_price')" density="compact" variant="outlined" class="mb-1"/>
+                <div class="mb-4">
+                    <v-chip v-for="key in validFieldKeys" :key="'inc_' + key" density="compact" size="small" class="me-1 mb-1" @click="insertIncomeFieldKey(key)">
+                        {{ key }}
+                    </v-chip>
+                </div>
+
+                <span v-if="!validFieldKeys.length" class="text-caption text-disabled">{{ tt('Add fields below to use in pricing expression') }}</span>
 
                 <v-divider class="mb-4"/>
 
@@ -194,7 +205,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
-import { mdiRefresh, mdiPencilOutline, mdiDeleteOutline, mdiPlus, mdiClose } from '@mdi/js';
+import { mdiRefresh, mdiPencilOutline, mdiDeleteOutline, mdiPlus, mdiClose, mdiArrowDown, mdiArrowUp } from '@mdi/js';
 
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { CategoryType } from '@/core/category.ts';
@@ -273,7 +284,8 @@ const emptyField = (): MutableItemField => ({
 const form = ref({
     name: '',
     icon: '',
-    pricingExpr: '',
+    expensePricingExpr: '',
+    incomePricingExpr: '',
     incomeCategoryId: '',
     expenseCategoryId: '',
     fields: [] as MutableItemField[],
@@ -303,7 +315,7 @@ async function reload() {
 function openCreateDialog() {
     isEditing.value = false;
     editingId.value = '';
-    form.value = { name: '', icon: '', pricingExpr: '', incomeCategoryId: '', expenseCategoryId: '', fields: [] };
+    form.value = { name: '', icon: '', expensePricingExpr: '', incomePricingExpr: '', incomeCategoryId: '', expenseCategoryId: '', fields: [] };
     showDialog.value = true;
 }
 
@@ -313,7 +325,8 @@ function openEditDialog(item: ItemDefinitionInfoResponse) {
     form.value = {
         name: item.name,
         icon: item.icon,
-        pricingExpr: item.pricingExpr,
+        expensePricingExpr: item.expensePricingExpr,
+        incomePricingExpr: item.incomePricingExpr,
         incomeCategoryId: item.incomeCategoryId || '',
         expenseCategoryId: item.expenseCategoryId || '',
         fields: item.fieldSchema?.fields
@@ -346,8 +359,12 @@ function removeOption(fieldIdx: number, optIdx: number) {
     }
 }
 
-function insertFieldKey(key: string) {
-    form.value.pricingExpr += (form.value.pricingExpr ? ' ' : '') + key;
+function insertExpenseFieldKey(key: string) {
+    form.value.expensePricingExpr += (form.value.expensePricingExpr ? ' ' : '') + key;
+}
+
+function insertIncomeFieldKey(key: string) {
+    form.value.incomePricingExpr += (form.value.incomePricingExpr ? ' ' : '') + key;
 }
 
 async function save() {
@@ -369,7 +386,8 @@ async function save() {
                 name: form.value.name,
                 icon: form.value.icon,
                 fieldSchema,
-                pricingExpr: form.value.pricingExpr,
+                expensePricingExpr: form.value.expensePricingExpr,
+                incomePricingExpr: form.value.incomePricingExpr,
                 incomeCategoryId: form.value.incomeCategoryId || '0',
                 expenseCategoryId: form.value.expenseCategoryId || '0',
             });
@@ -378,7 +396,8 @@ async function save() {
                 name: form.value.name,
                 icon: form.value.icon,
                 fieldSchema,
-                pricingExpr: form.value.pricingExpr,
+                expensePricingExpr: form.value.expensePricingExpr,
+                incomePricingExpr: form.value.incomePricingExpr,
                 incomeCategoryId: form.value.incomeCategoryId || '0',
                 expenseCategoryId: form.value.expenseCategoryId || '0',
             });

@@ -20,16 +20,23 @@
                 </template>
             </f7-list-item>
 
-            <f7-list-input type="text" :label="tt('Pricing Expression')"
-                           :placeholder="tt('Pricing Expression (e.g. weight * unit_price)')"
-                           clear-button v-model:value="form.pricingExpr" />
+            <f7-list-input type="text" :label="tt('Expense Pricing Expression')"
+                           :placeholder="tt('e.g. weight * buy_price')"
+                           clear-button v-model:value="form.expensePricingExpr" />
             <f7-list-item v-if="validFieldKeys.length" class="field-key-chips">
-                <template #title>
-                    <span class="text-caption text-color-gray">{{ tt('Select field to insert into expression') }}:</span>
-                </template>
                 <template #after>
-                    <f7-chip v-for="key in validFieldKeys" :key="key" :text="key"
-                             class="margin-right-half" @click="insertFieldKey(key)" />
+                    <f7-chip v-for="key in validFieldKeys" :key="'exp_' + key" :text="key"
+                             class="margin-right-half" @click="insertExpenseFieldKey(key)" />
+                </template>
+            </f7-list-item>
+
+            <f7-list-input type="text" :label="tt('Income Pricing Expression')"
+                           :placeholder="tt('e.g. weight * sell_price')"
+                           clear-button v-model:value="form.incomePricingExpr" />
+            <f7-list-item v-if="validFieldKeys.length" class="field-key-chips">
+                <template #after>
+                    <f7-chip v-for="key in validFieldKeys" :key="'inc_' + key" :text="key"
+                             class="margin-right-half" @click="insertIncomeFieldKey(key)" />
                 </template>
             </f7-list-item>
 
@@ -269,7 +276,8 @@ const emptyField = (): MutableItemField => ({
 const form = ref({
     name: '',
     icon: '',
-    pricingExpr: '',
+    expensePricingExpr: '',
+    incomePricingExpr: '',
     incomeCategoryId: '',
     expenseCategoryId: '',
     fields: [] as MutableItemField[],
@@ -331,8 +339,12 @@ function removeOption(fieldIdx: number, optIdx: number) {
     if (field?.options) field.options.splice(optIdx, 1);
 }
 
-function insertFieldKey(key: string) {
-    form.value.pricingExpr += (form.value.pricingExpr ? ' ' : '') + key;
+function insertExpenseFieldKey(key: string) {
+    form.value.expensePricingExpr += (form.value.expensePricingExpr ? ' ' : '') + key;
+}
+
+function insertIncomeFieldKey(key: string) {
+    form.value.incomePricingExpr += (form.value.incomePricingExpr ? ' ' : '') + key;
 }
 
 async function save() {
@@ -362,7 +374,8 @@ async function save() {
                 name: form.value.name.trim(),
                 icon: form.value.icon,
                 fieldSchema,
-                pricingExpr: form.value.pricingExpr,
+                expensePricingExpr: form.value.expensePricingExpr,
+                incomePricingExpr: form.value.incomePricingExpr,
                 incomeCategoryId: form.value.incomeCategoryId || '0',
                 expenseCategoryId: form.value.expenseCategoryId || '0',
             });
@@ -371,7 +384,8 @@ async function save() {
                 name: form.value.name.trim(),
                 icon: form.value.icon,
                 fieldSchema,
-                pricingExpr: form.value.pricingExpr,
+                expensePricingExpr: form.value.expensePricingExpr,
+                incomePricingExpr: form.value.incomePricingExpr,
                 incomeCategoryId: form.value.incomeCategoryId || '0',
                 expenseCategoryId: form.value.expenseCategoryId || '0',
             });
@@ -394,7 +408,8 @@ function loadItemDefinition(id: string) {
         form.value = {
             name: def.name,
             icon: def.icon,
-            pricingExpr: def.pricingExpr,
+            expensePricingExpr: def.expensePricingExpr,
+            incomePricingExpr: def.incomePricingExpr,
             incomeCategoryId: def.incomeCategoryId || '',
             expenseCategoryId: def.expenseCategoryId || '',
             fields: def.fieldSchema?.fields

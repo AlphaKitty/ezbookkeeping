@@ -32,8 +32,12 @@
                 </template>
                 <template #title>{{ def.name }}</template>
                 <template #footer>{{ tt('Fields') }}: {{ def.fieldSchema?.fields?.length || 0 }}</template>
-                <template #after v-if="def.pricingExpr">
-                    <span class="text-caption text-color-gray text-no-wrap">{{ def.pricingExpr }}</span>
+                <template #after v-if="def.expensePricingExpr || def.incomePricingExpr">
+                    <span class="text-caption text-color-gray text-no-wrap">
+                        <span v-if="def.expensePricingExpr">↓{{ def.expensePricingExpr }}</span>
+                        <span v-if="def.expensePricingExpr && def.incomePricingExpr"> </span>
+                        <span v-if="def.incomePricingExpr">↑{{ def.incomePricingExpr }}</span>
+                    </span>
                 </template>
                 <f7-swipeout-actions :right="true">
                     <f7-swipeout-button color="red" close @click="confirmDelete(def)">
