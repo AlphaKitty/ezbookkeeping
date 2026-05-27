@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>企业记账 - 操作指南（桌面端）</title>
+<style>
+  @page { margin: 12px; }
+  .section, .step-card, .toc { page-break-inside: avoid; }
+  .feature-table tr { page-break-inside: avoid; }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: #1a1a2e; background: #f7f8fa; line-height: 1.7;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; text-align: center; padding: 48px 24px 36px;
+  }
+  .hero h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; letter-spacing: 1px; }
+  .hero p { font-size: .95rem; opacity: .85; }
+
+  .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
+
+  .section { margin: 32px 0; }
+  .section-title {
+    font-size: 1.15rem; font-weight: 700; color: #1a1a2e;
+    padding-bottom: 10px; border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #0f3460; color: #fff; font-size: .85rem; font-weight: 700; flex-shrink: 0;
+  }
+
+  .badge {
+    display: inline-block; font-size: .7rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; letter-spacing: .5px; vertical-align: middle; margin-left: 4px;
+  }
+  .badge-new { background: #fff3e0; color: #e65100; }
+
+  .platform-label {
+    display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; letter-spacing: .5px; background: #e8edf5; color: #0f3460;
+    margin-bottom: 12px;
+  }
+
+  .step-card {
+    background: #fff; border-radius: 10px; padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 12px;
+  }
+  .step-card ol { padding-left: 22px; }
+  .step-card li { margin-bottom: 8px; font-size: .9rem; line-height: 1.6; }
+  .step-card li:last-child { margin-bottom: 0; }
+  .step-card .intro { font-size: .9rem; color: #666; margin-bottom: 12px; }
+  .step-card .tip {
+    margin-top: 12px; padding: 10px 14px; background: #f0f4ff;
+    border-radius: 6px; font-size: .84rem; color: #555;
+  }
+  .step-card .tip::before { content: "💡 "; }
+
+  .sub-title {
+    font-size: 1rem; font-weight: 700; color: #333; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sub-icon { font-size: 1.1rem; }
+
+  .feature-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .feature-table, .feature-table thead, .feature-table tbody,
+  .feature-table th, .feature-table td, .feature-table tr { display: block; }
+  .feature-table thead { display: none; }
+  .feature-table tr:first-child td:first-child { border-radius: 10px 10px 0 0; }
+  .feature-table tr:last-child td:last-child { border-radius: 0 0 10px 10px; }
+  .feature-table td {
+    padding: 10px 14px 10px 90px; position: relative;
+    min-height: 44px; font-size: .88rem; background: #fff;
+    border-bottom: 1px solid #f0f0f0; vertical-align: top;
+  }
+  .feature-table td::before {
+    position: absolute; left: 14px; top: 10px; font-weight: 700;
+    font-size: .8rem; color: #0f3460; white-space: nowrap;
+  }
+  .feature-table td:nth-child(1)::before { content: "字段"; }
+  .feature-table td:nth-child(2)::before { content: "说明"; }
+  .feature-table .col-field { color: #444; font-weight: 600; }
+  .feature-table .col-desc { color: #555; }
+
+  .toc {
+    background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .toc-title { font-weight: 700; margin-bottom: 10px; font-size: .95rem; }
+  .toc a { display: block; padding: 5px 0; color: #0f3460; text-decoration: none; font-size: .88rem; }
+  .toc a:hover { text-decoration: underline; }
+
+  .footer {
+    text-align: center; padding: 32px 20px; color: #999; font-size: .78rem;
+    border-top: 1px solid #e0e0e0; margin-top: 32px;
+  }
+
+  @media screen and (min-width: 601px) {
+    .hero { padding: 60px 24px 48px; }
+    .hero h1 { font-size: 2rem; }
+    .hero p { font-size: 1.1rem; }
+    .section { margin: 40px 0; }
+    .section-title { font-size: 1.35rem; padding-bottom: 12px; margin-bottom: 24px; }
+    .section-num { width: 32px; height: 32px; font-size: .9rem; }
+    .container { padding: 0 20px; }
+    .toc { padding: 24px; }
+    .feature-table, .feature-table thead, .feature-table tbody,
+    .feature-table th, .feature-table td, .feature-table tr { display: revert; }
+    .feature-table thead { display: table-header-group; }
+    .feature-table tr:first-child td:first-child,
+    .feature-table tr:last-child td:last-child { border-radius: 0; }
+    .feature-table tr:first-child th:first-child { border-radius: 10px 0 0 0; }
+    .feature-table tr:first-child th:last-child { border-radius: 0 10px 0 0; }
+    .feature-table tr:last-child td:first-child { border-radius: 0 0 0 10px; }
+    .feature-table tr:last-child td:last-child { border-radius: 0 0 10px 0; }
+    .feature-table th {
+      background: #0f3460; color: #fff; font-weight: 600; font-size: .9rem;
+      padding: 14px 16px; text-align: left;
+    }
+    .feature-table td {
+      padding: 14px 16px; font-size: .9rem; position: static;
+      min-height: auto;
+    }
+    .feature-table td::before { display: none; }
+    .feature-table .col-field { width: 20%; }
+    .feature-table .col-desc { width: 80%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>企业记账</h1>
+  <p>操作指南 · 桌面端</p>
+</header>
+
+<div class="container">
+
+  <div class="section">
+    <div class="toc">
+      <div class="toc-title">目录</div>
+      <a href="#s1">一、登录与注册</a>
+      <a href="#s2">二、设置</a>
+      <a href="#s3">三、账户管理</a>
+      <a href="#s4">四、分类与标签</a>
+      <a href="#s5">五、记一笔账</a>
+      <a href="#s6">六、导入账单</a>
+      <a href="#s7">七、首页看板 —— 打开就能了解经营状况</a>
+      <a href="#s8">八、查看和搜索账单</a>
+      <a href="#s9">九、定期记账与模板</a>
+      <a href="#s10">十、对账</a>
+      <a href="#s11">十一、统计分析</a>
+      <a href="#s12">十二、库存管理 <span class="badge badge-new">即将上线</span></a>
+    </div>
+  </div>
+
+  <!-- 一、登录与注册 -->
+  <div class="section" id="s1">
+    <h2 class="section-title"><span class="section-num">一</span>登录与注册</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 登录与注册</div>
+      <p class="intro">打开网址后进入登录页面，左侧是品牌展示，右侧是登录表单。</p>
+      <ol>
+        <li>在「用户名或邮箱」输入框中输入账号或邮箱地址。</li>
+        <li>在「密码」输入框中输入密码。</li>
+        <li>点击「登录」按钮进入系统。</li>
+        <li>如果没有账号，点击下方的「注册」链接，填写邮箱、用户名和密码即可创建账号。</li>
+        <li>忘记密码时，点击「忘记密码」，输入注册邮箱后会收到重置邮件。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 二、设置 -->
+  <div class="section" id="s2">
+    <h2 class="section-title"><span class="section-num">二</span>设置</h2>
+    <span class="platform-label">桌面端</span>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 个人信息</div>
+      <ol>
+        <li>点击右上角头像，选择「用户设置」。</li>
+        <li>在「基本信息」标签页可修改昵称、邮箱、默认货币、时区、语言、日期和数字格式。</li>
+        <li>在「安全」标签页可修改登录密码。</li>
+        <li>在「数据管理」标签页可查看数据统计、导出数据或清空数据。</li>
+      </ol>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 应用设置</div>
+      <ol>
+        <li>点击右上角头像，选择「应用设置」。</li>
+        <li><strong>主题</strong>：切换浅色/深色/跟随系统。</li>
+        <li><strong>应用锁</strong>：设置 PIN 码或指纹锁，打开应用需要验证。</li>
+        <li><strong>统计设置</strong>：调整图表默认显示偏好。</li>
+        <li><strong>浏览器缓存管理</strong>：管理离线数据缓存。</li>
+      </ol>
+    </div>
+  </div>
+
+<!-- 三、账户管理 -->
+  <div class="section" id="s3">
+    <h2 class="section-title"><span class="section-num">三</span>账户管理</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 账户管理</div>
+      <ol>
+        <li>左侧导航栏点击「账户」进入账户管理页面。</li>
+        <li>左侧显示各类账户（现金、银行卡、信用卡等）的汇总余额，点击切换查看。</li>
+        <li>点击「添加账户」按钮，填写账户名称、选择币种、设置图标和颜色，还可以设置父账户创建子账户层级。</li>
+        <li>账户列表显示每个账户的名称、图标和当前余额。</li>
+        <li>点击账户旁的编辑按钮可修改账户信息，点击删除可移除账户。</li>
+        <li>支持<strong>对账</strong>：选中账户，点击对账按钮，逐条核对交易记录。</li>
+        <li>支持<strong>隐藏账户</strong>：不常用的账户可以隐藏，不在首页和列表中显示。</li>
+        <li>支持<strong>调整排序</strong>：按使用频率自由拖拽排序。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 四、分类与标签 -->
+  <div class="section" id="s4">
+    <h2 class="section-title"><span class="section-num">四</span>分类与标签</h2>
+    <span class="platform-label">桌面端</span>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 分类管理</div>
+      <ol>
+        <li>左侧导航栏点击「分类」进入分类管理页面。</li>
+        <li>左侧顶部切换收支类型（支出/收入/转账），下方列出所有一级分类。</li>
+        <li>点击一级分类，右侧显示其下的二级分类列表。</li>
+        <li>点击「添加」按钮创建新分类：输入名称、选择图标和颜色、指定父分类。</li>
+        <li>支持<strong>预设模板</strong>：内置常用分类模板（餐饮、交通、购物等），可一键导入。</li>
+        <li>支持<strong>隐藏分类</strong>和<strong>调整排序</strong>。</li>
+      </ol>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 标签管理</div>
+      <ol>
+        <li>左侧导航栏点击「标签」进入标签管理页面。</li>
+        <li>左侧显示标签组（可创建如「客户」「项目」「员工」等分组）。</li>
+        <li>点击标签旁的编辑按钮可<strong>内联编辑</strong>标签名称，直接在当前行修改。</li>
+        <li>支持批量添加标签和隐藏不常用标签。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 五、记一笔账 -->
+  <div class="section" id="s5">
+    <h2 class="section-title"><span class="section-num">五</span>记一笔账</h2>
+    <span class="platform-label">桌面端</span>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 记一笔支出</div>
+      <ol>
+        <li>点击顶部工具栏的「记一笔」按钮，弹出记账对话框。</li>
+        <li>左侧竖排选择交易类型：「支出」。</li>
+        <li>在金额框中输入数字，比如 <code>150.00</code>。支持算式，输入 <code>30*5</code> 自动算出 <code>150.00</code>。</li>
+        <li>点击分类选择器，先选一级分类（如「餐饮食品」），再选二级分类（如「午餐」）。</li>
+        <li>选择扣款账户，比如「工商银行卡」。</li>
+        <li>确认日期和时间，默认是当前时间，可按需修改。</li>
+        <li>（选填）在备注框中输入文字说明，比如「请客户吃饭」。</li>
+        <li>（选填）添加标签，如「招待」，方便后续按标签筛选。</li>
+        <li>（选填）切换到「图片」标签页上传收据或发票照片。</li>
+        <li>点击底部「保存」按钮完成记账。</li>
+      </ol>
+      <div class="tip">左侧「基本信息」「地图位置」「图片」三个标签页可以切换表单内容。</div>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 记一笔收入</div>
+      <p class="intro">操作与支出相同，区别在于左侧选择「收入」类型，分类和金额按收入来处理。</p>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 记一笔转账</div>
+      <ol>
+        <li>左侧选择「转账」类型。</li>
+        <li>输入转出金额。</li>
+        <li>选择「来源账户」（转出）和「目标账户」（转入），比如从「工商银行卡」转 5000 元到「支付宝」。</li>
+        <li>如果两个账户币种不同，系统会自动显示汇率换算结果。</li>
+        <li>确认日期和分类后点击「保存」。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 六、导入账单 -->
+  <div class="section" id="s6">
+    <h2 class="section-title"><span class="section-num">六</span>导入账单</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 导入账单</div>
+      <ol>
+        <li>在账单列表页面，点击顶部工具栏的「导入」按钮。</li>
+        <li>在弹出的对话框中选择文件来源类型（如支付宝、微信、银行 OFX/QIF/CSV 等）。</li>
+        <li>选择要导入的文件，系统会自动解析并预览数据。</li>
+        <li>确认数据无误后，点击「导入」完成。</li>
+      </ol>
+      <div class="tip">支持格式：银行流水（OFX/QFX/QIF/IIF/MT940/Camt.052/Camt.053/CSV）、支付宝 CSV、微信 CSV/XLSX、京东金融 CSV、随手记 XLS/XLSX、GnuCash XML、Firefly III CSV、Beancount、Excel 等。</div>
+    </div>
+  </div>
+
+  
+<!-- 七、首页看板 -->
+  <div class="section" id="s7">
+    <h2 class="section-title"><span class="section-num">七</span>首页看板 —— 打开就能了解经营状况</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 首页看板</div>
+      <p class="intro">登录后默认进入首页看板，所有关键数据集中展示在一个页面中。</p>
+      <ol>
+        <li><strong>左侧总览区</strong>：显示本月支出金额和净资产总额。点击眼睛图标可以隐藏/显示金额数字。</li>
+        <li><strong>右上资产区</strong>：列出所有账户及其余额，一眼看清每个账户里有多少钱。</li>
+        <li><strong>趋势图表</strong>：展示本月每日收支趋势，柱状图直观对比每天的收入和支出。</li>
+        <li><strong>快捷日期卡片</strong>：今日、本周、本月、本年的收支汇总，点击任意卡片跳转到对应时间段的账单列表。</li>
+      </ol>
+      <div class="tip">左侧是常驻导航栏，可以随时切换到账单、统计、账户等其他功能。</div>
+    </div>
+  </div>
+
+  
+<!-- 八、查看和搜索账单 -->
+  <div class="section" id="s8">
+    <h2 class="section-title"><span class="section-num">八</span>查看和搜索账单</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 查看和搜索账单</div>
+      <ol>
+        <li>左侧导航栏点击「账单」，进入账单列表页面。</li>
+        <li>页面顶部可切换三种视图：<strong>列表</strong>（表格形式）、<strong>图片</strong>（卡片式预览）、<strong>日历</strong>（按日期分布）。</li>
+        <li>左侧筛选区可以按<strong>交易类型</strong>（全部/收入/支出/转账）、<strong>时间范围</strong>（如本月、上月、自定义日期）快速筛选。</li>
+        <li>顶部搜索框输入关键字（备注内容、金额等），回车或点击搜索图标即可过滤。</li>
+        <li>每笔账单右侧有编辑和删除按钮，点击编辑可修改该笔账单的所有信息。</li>
+        <li>勾选多笔账单后，可以使用顶部的「批量操作」统一修改分类、账户或标签。</li>
+        <li>每页显示数量可通过左侧下拉框调整（20/50/100 条）。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 九、定期记账与模板 -->
+  <div class="section" id="s9">
+    <h2 class="section-title"><span class="section-num">九</span>定期记账与模板</h2>
+    <span class="platform-label">桌面端</span>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 定期交易</div>
+      <p class="intro">定期交易适合每月固定的收支项目（如租金、工资、贷款还款），设置一次后系统自动按时记账。</p>
+      <ol>
+        <li>左侧导航栏点击「定期交易」进入管理页面。</li>
+        <li>点击「添加」，填写交易信息（类型、金额、分类、账户等），和记一笔普通账一样。</li>
+        <li>填写<strong>模板名称</strong>（如「每月房租」）。</li>
+        <li>设置<strong>执行频率</strong>：每小时、每天、每周、每月、每年，或自定义 Cron 表达式。</li>
+        <li>设置<strong>开始日期</strong>和<strong>结束日期</strong>（可选）。</li>
+        <li>保存后系统会按设定频率自动生成交易记录。</li>
+      </ol>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 模板</div>
+      <p class="intro">模板是预设好的交易格式，适合频繁发生的同类交易，一键套用。</p>
+      <ol>
+        <li>左侧导航栏点击「模板」进入模板管理页面。</li>
+        <li>创建模板时填写常用的交易信息（类型、金额、分类、账户等），给模板命名。</li>
+        <li>记账时在对话框中点击「从模板创建」，选择一个模板即可自动填充所有字段。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 十、对账 -->
+  <div class="section" id="s10">
+    <h2 class="section-title"><span class="section-num">十</span>对账</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 对账</div>
+      <p class="intro">对账是将系统中的交易记录与银行账单逐条核对，确保两边数据一致。</p>
+      <ol>
+        <li>在账户管理页面，选中要对账的账户。</li>
+        <li>点击「对账」按钮，进入对账页面。左侧显示该账户的所有交易记录。</li>
+        <li>逐条勾选与银行账单匹配的交易，已勾选的金额会自动累加。</li>
+        <li>对完当前所有交易后，可以点击「更新对账时间」，记录本次对账的时间点。</li>
+        <li>以后对账时可以筛选「上次对账时间之后」的交易，只核对新增部分。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+<!-- 十一、统计分析 -->
+  <div class="section" id="s11">
+    <h2 class="section-title"><span class="section-num">十一</span>统计分析</h2>
+    <span class="platform-label">桌面端</span>
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 统计分析</div>
+      <ol>
+        <li>左侧导航栏点击「统计」进入统计分析页面。</li>
+        <li>左侧面板可选择<strong>分析类型</strong>：
+          <ul style="margin:6px 0 0 18px;font-size:.88rem;">
+            <li><strong>分类统计</strong>：饼图展示各分类的收支占比。</li>
+            <li><strong>趋势分析</strong>：折线图/柱状图展示收支随时间的变化。</li>
+            <li><strong>资产趋势</strong>：各账户余额的长期变化趋势。</li>
+          </ul>
+        </li>
+        <li>选择<strong>图表类型</strong>：饼图、柱状图、折线图、雷达图、热力图、桑基图、层级图等。</li>
+        <li>左侧下方可切换<strong>数据维度</strong>：总览、按账户、按分类、按标签等。</li>
+        <li>支持<strong>导出统计图表</strong>为图片或数据文件。</li>
+      </ol>
+      <div class="tip">左侧面板所有筛选条件实时生效，切换维度无需刷新页面。</div>
+    </div>
+  </div>
+
+  
+<!-- 十二、库存管理 -->
+  <div class="section" id="s12">
+    <h2 class="section-title">
+      <span class="section-num">十二</span>库存管理
+      <span class="badge badge-new">即将上线</span>
+    </h2>
+    <span class="platform-label">桌面端</span>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 物品建档</div>
+      <ol>
+        <li>左侧导航栏点击「物品定义」进入物品管理页面。</li>
+        <li>点击「添加物品」，填写名称、单位（个/箱/kg 等）、分类和图标。</li>
+        <li>设置<strong>进价表达式</strong>和<strong>售价表达式</strong>，系统可根据公式自动计算金额。</li>
+        <li>所有物品统一建档，方便统一管理和查找。</li>
+      </ol>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 进出库记录</div>
+      <ol>
+        <li>左侧导航栏点击「库存记录」进入库存页面。</li>
+        <li>点击「添加记录」登记一次库存变动：选择物品、填写数量、单价、变动日期。</li>
+        <li>系统自动计算当前库存余量。</li>
+        <li>支持按物品、时间范围筛选查看库存变动历史。</li>
+      </ol>
+    </div>
+
+    <div class="step-card">
+      <div class="sub-title"><span class="sub-icon">🖥</span> 交易关联库存</div>
+      <ol>
+        <li>记账时，在对话框中勾选「关联库存」选项。</li>
+        <li>选择关联的物品和数量。</li>
+        <li>保存交易后，库存自动扣减对应数量，无需手动更新库存。</li>
+        <li>进价和售价分开管理，利润一目了然。</li>
+      </ol>
+    </div>
+  </div>
+
+  
+
+</div>
+
+<footer class="footer">
+  企业记账 &middot; 操作指南（桌面端）
+</footer>
+
+</body>
+</html>

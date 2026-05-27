@@ -31,7 +31,7 @@ func main() {
 	core.BuildTime = BuildUnixTime
 
 	cmd := &cli.Command{
-		Name:    "企业记账",
+		Name:    "ezbookkeeping",
 		Usage:   "A lightweight, self-hosted personal finance app with a user-friendly interface and powerful bookkeeping features.",
 		Version: GetFullVersion(),
 		Commands: []*cli.Command{
