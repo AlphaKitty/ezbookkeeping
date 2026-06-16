@@ -44,7 +44,7 @@
                     <ItemIcon icon-type="category" :icon-id="getItemDefIcon(record.itemDefinitionId)" />
                 </template>
                 <template #title>{{ getRecordDisplayName(record) }}</template>
-                <template #footer>{{ statusLabel(record.status) }} · {{ record.itemDefinitionName }}</template>
+                <template #footer>{{ statusLabel(record.status) }} · {{ record.quantity || 0 }}{{ record.unit ? ' ' + record.unit : '' }} · {{ record.itemDefinitionName }}</template>
                 <f7-swipeout-actions :right="true">
                     <f7-swipeout-button color="red" close @click="confirmDelete(record)">
                         <f7-icon f7="trash"></f7-icon>

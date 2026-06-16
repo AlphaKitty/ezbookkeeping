@@ -973,7 +973,9 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 
 	transactionEditable := transaction.IsEditable(user, clientTimezone, accountMap[transaction.AccountId], accountMap[transaction.RelatedAccountId])
 	transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, nil, transactionEditable)
+		inventoryIndexes, _ := services.TransactionInventoryIndexes.GetInventoryIndexesByTransactionId(c, uid, transaction.TransactionId)
+		inventoryRecordIds, inventoryRecordAmounts := getInventoryRecordIdsAndAmountsFromIndexes(inventoryIndexes)
+		transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, inventoryRecordIds, inventoryRecordAmounts, transactionEditable)
 
 	if !transactionGetReq.TrimAccount {
 		if sourceAccount := accountMap[transaction.AccountId]; sourceAccount != nil {
@@ -1137,7 +1139,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 					return nil, errs.Or(err, errs.ErrOperationFailed)
 				}
 
-				transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
+				transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, nil, transactionEditable)
 				transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 				return transactionResp, nil
@@ -1157,7 +1159,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 	a.updateInventoryAfterTransactionCreate(c, uid, transaction, inventoryRecordIds, transactionCreateReq.InventoryRecordAmounts)
 
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
-	transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
+	transactionResp := transaction.ToTransactionInfoResponse(tagIds, nil, nil, transactionEditable)
 	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 	return transactionResp, nil
@@ -1364,7 +1366,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
 	newTransaction.Type = transaction.Type
-	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, nil, transactionEditable)
+	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, nil, nil, transactionEditable)
 	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
 
 	return newTransactionResp, nil
@@ -2903,7 +2905,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 		transactionEditable := transaction.IsEditable(user, clientTimezone, allAccounts[transaction.AccountId], allAccounts[transaction.RelatedAccountId])
 		transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, nil, transactionEditable)
+		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, nil, nil, transactionEditable)
 
 		if !trimAccount {
 			if sourceAccount := allAccounts[transaction.AccountId]; sourceAccount != nil {
@@ -3053,4 +3055,18 @@ func (a *TransactionsApi) reverseInventoryAfterTransactionDelete(c core.Context,
 				index.InventoryRecordId, transaction.TransactionId, err.Error())
 		}
 	}
+}
+
+// getInventoryRecordIdsAndAmountsFromIndexes extracts inventory record IDs and amounts from inventory indexes
+func getInventoryRecordIdsAndAmountsFromIndexes(indexes []*models.TransactionInventoryIndex) ([]int64, []float64) {
+	if len(indexes) == 0 {
+		return nil, nil
+	}
+	ids := make([]int64, len(indexes))
+	amounts := make([]float64, len(indexes))
+	for i, idx := range indexes {
+		ids[i] = idx.InventoryRecordId
+		amounts[i] = idx.Amount
+	}
+	return ids, amounts
 }

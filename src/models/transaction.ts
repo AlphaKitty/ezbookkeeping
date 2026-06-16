@@ -372,6 +372,7 @@ export class Transaction implements TransactionInfoResponse {
 
         transaction.inventoryRecordId = transactionResponse.inventoryRecordId;
         transaction.inventoryRecordIds = transactionResponse.inventoryRecordIds;
+        transaction.inventoryRecordAmounts = transactionResponse.inventoryRecordAmounts;
         transaction.inventoryAction = transactionResponse.inventoryAction;
 
         return transaction;
@@ -690,6 +691,7 @@ export interface TransactionInfoResponse {
     readonly editable: boolean;
     readonly inventoryRecordId?: string;
     readonly inventoryRecordIds?: string[];
+    readonly inventoryRecordAmounts?: number[];
     readonly inventoryAction?: string;
 }
 

@@ -227,19 +227,45 @@
 
                 <f7-list-item v-for="recordId in selectedInventoryRecordIds" :key="recordId"
                               :title="getInventoryRecordName(recordId)"
+                              :footer="getInventoryRecordStockInfo(recordId)"
                               link="#" @click="goToInventoryRecord(recordId)"
                               swipeout>
                     <template #after>
+                        <f7-icon v-if="isQuantityExceedsStock(recordId)" f7="exclamationmark_triangle_fill" class="text-color-red margin-right-half" :tooltip="tt('Quantity exceeds available stock')"></f7-icon>
+                        <f7-icon v-else-if="getRecordMissingFields(recordId).length" f7="exclamationmark_triangle_fill" class="text-color-orange margin-right-half" :tooltip="tt('Missing fields') + ': ' + getRecordMissingFieldsSummary(recordId)"></f7-icon>
+                        <input type="number" min="0" class="inventory-qty-input"
+                               :class="{ 'inventory-qty-exceed': isQuantityExceedsStock(recordId) }"
+                               :value="movedQuantities[recordId] ?? 0"
+                               @input="onMovedQuantityChange(recordId, $event)"
+                               :placeholder="tt('Quantity')" />
                         <f7-link @click="removeSelectedInventoryRecord(recordId)">
                             <f7-icon f7="xmark_circle_fill" class="text-color-red margin-left-half"></f7-icon>
                         </f7-link>
                     </template>
                 </f7-list-item>
 
-                <f7-list-item v-if="hasInventoryPricingExpr" class="text-color-gray">
+                <f7-list-item v-if="selectedInventoryRecordIds.length > 0" class="text-color-gray">
                     <template #title>
                         <f7-block class="no-padding no-margin">
                             <span class="text-color-gray" style="font-size: 14px">{{ tt('inventoryAmountAutoCalculated') }}</span>
+                        </f7-block>
+                    </template>
+                </f7-list-item>
+
+                <f7-list-item v-if="hasQuantityExceedRecords" class="text-color-red">
+                    <template #title>
+                        <f7-block class="no-padding no-margin">
+                            <f7-icon f7="exclamationmark_triangle_fill" class="text-color-red"></f7-icon>
+                            <span style="font-size: 14px">{{ tt('Some inventory record quantities exceed available stock') }}</span>
+                        </f7-block>
+                    </template>
+                </f7-list-item>
+
+                <f7-list-item v-if="hasIncompleteFieldRecords" class="text-color-orange">
+                    <template #title>
+                        <f7-block class="no-padding no-margin">
+                            <f7-icon f7="exclamationmark_triangle_fill" class="text-color-orange"></f7-icon>
+                            <span style="font-size: 14px">{{ tt('Some inventory record fields are missing') }}</span>
                         </f7-block>
                     </template>
                 </f7-list-item>
@@ -793,6 +819,7 @@ const inventoryItemDefs = ref<ItemDefinitionInfoResponse[]>([]);
 const inventoryItemDefsLoaded = ref(false);
 const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
 const selectedInventoryRecordIds = ref<string[]>([]);
+	const movedQuantities = ref<Record<string, number>>({});
 const inventoryRecordsLoaded = ref(false);
 const showInventoryRecordPopup = ref(false);
 const showInventoryEditPopup = ref(false);
@@ -1017,11 +1044,32 @@ function getPricingExpr(def: ItemDefinitionInfoResponse): string {
 }
 
 const hasInventoryPricingExpr = computed(() => {
-    for (const recordId of selectedInventoryRecordIds.value) {
-        const def = getSelectedRecordItemDef(recordId);
-        if (def && getPricingExpr(def)) return true;
-    }
-    return false;
+    return selectedInventoryRecordIds.value.length > 0;
+});
+
+const hasIncompleteFieldRecords = computed(() => {
+    return selectedInventoryRecordIds.value.some(id => getRecordMissingFields(id).length > 0);
+});
+
+function getRecordMissingFieldsSummary(recordId: string): string {
+    const missing = getRecordMissingFields(recordId);
+    if (!missing.length) return '';
+    return missing.join(', ');
+}
+
+function getRecordStock(recordId: string): number {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    return record?.quantity || 0;
+}
+
+function isQuantityExceedsStock(recordId: string): boolean {
+    const movedQty = movedQuantities.value[recordId] || 0;
+    const stock = getRecordStock(recordId);
+    return movedQty > 0 && stock > 0 && movedQty > stock;
+}
+
+const hasQuantityExceedRecords = computed(() => {
+    return selectedInventoryRecordIds.value.some(id => isQuantityExceedsStock(id));
 });
 
 const isInventoryAmountLocked = computed(() => hasInventoryPricingExpr.value);
@@ -1098,23 +1146,38 @@ function onLinkInventoryToggle(enabled: boolean) {
         transaction.value.inventoryRecordAmounts = undefined;
         transaction.value.inventoryAction = undefined;
     }
+        movedQuantities.value = {};
 }
 
 function addSelectedInventoryRecord(recordId: string) {
     if (!recordId || selectedInventoryRecordIds.value.includes(recordId)) return;
     selectedInventoryRecordIds.value = [...selectedInventoryRecordIds.value, recordId];
+        movedQuantities.value[recordId] = 0;
     applyCategoryFromSelectedRecords();
     recalcInventoryAmount();
 }
 
 function removeSelectedInventoryRecord(recordId: string) {
     selectedInventoryRecordIds.value = selectedInventoryRecordIds.value.filter(id => id !== recordId);
+        delete movedQuantities.value[recordId];
     recalcInventoryAmount();
 }
 
 function getInventoryRecordName(recordId: string): string {
     const opt = inventoryRecordOptions.value.find(o => o.id === recordId);
     return opt?.name || `#${recordId}`;
+}
+
+function onMovedQuantityChange(recordId: string, event: Event): void {
+    const val = parseFloat((event.target as HTMLInputElement).value);
+    movedQuantities.value[recordId] = isNaN(val) ? 0 : val;
+    recalcInventoryAmount();
+}
+
+function getInventoryRecordStockInfo(recordId: string): string {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return '';
+    return (record.quantity || 0) + (record.unit ? ' ' + record.unit : '');
 }
 
 async function goToInventoryRecord(recordId: string) {
@@ -1197,17 +1260,39 @@ function applyCategoryFromSelectedRecords() {
     }
 }
 
-async function loadInventoryDataForExistingTransaction(inventoryRecordIds: string[]) {
+async function loadInventoryDataForExistingTransaction(inventoryRecordIds: string[], existingAmounts?: number[]) {
     try {
         await loadInventoryItemDefs();
         await loadInventoryRecords();
         selectedInventoryRecordIds.value = inventoryRecordIds;
         linkInventory.value = true;
+        for (let i = 0; i < inventoryRecordIds.length; i++) {
+            const recordId = inventoryRecordIds[i];
+            if (recordId) {
+                movedQuantities.value[recordId] = existingAmounts?.[i] ?? 0;
+            }
+        }
         applyCategoryFromSelectedRecords();
         recalcInventoryAmount();
     } catch (error: any) {
         logger.warn('failed to load inventory data for existing transaction', error);
     }
+}
+
+function getRecordMissingFields(recordId: string): string[] {
+    const def = getSelectedRecordItemDef(recordId);
+    if (!def?.fieldSchema?.fields?.length) return [];
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return [];
+    const fieldValues = record.fieldValues?.values || {};
+    const missing: string[] = [];
+    for (const field of def.fieldSchema.fields) {
+        const val = fieldValues[field.key];
+        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
+            missing.push(field.key);
+        }
+    }
+    return missing;
 }
 
 function recalcInventoryAmount() {
@@ -1221,38 +1306,50 @@ function recalcInventoryAmount() {
 
         const def = getSelectedRecordItemDef(recordId);
         if (!def) continue;
+
+        const movedQty = movedQuantities.value[recordId] || 0;
         const expr = getPricingExpr(def);
-        if (!expr) continue;
 
-        const fieldValues = record.fieldValues?.values || {};
-        let substituted = expr;
-        let allFieldsFilled = true;
+        if (expr) {
+            const usesMovedQuantity = expr.includes('movedQuantity');
+            const fieldValues = record.fieldValues?.values || {};
+            let substituted = expr.replace(/movedQuantity/g, String(movedQty));
 
-        for (const field of def.fieldSchema?.fields || []) {
-            const val = fieldValues[field.key];
-            if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
-                allFieldsFilled = false;
-                break;
+            for (const field of def.fieldSchema?.fields || []) {
+                const val = fieldValues[field.key];
+                const replacement = (val !== null && val !== undefined && val !== '' && !(typeof val === 'number' && isNaN(val)))
+                    ? String(val)
+                    : '0';
+                substituted = substituted.replace(new RegExp(field.key, 'g'), replacement);
             }
-            substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
-        }
 
-        if (!allFieldsFilled) continue;
-
-        const amount = evaluateExpressionToAmount(substituted);
-        if (amount !== undefined) {
+            const unitAmount = evaluateExpressionToAmount(substituted);
+            if (unitAmount !== undefined) {
+                if (usesMovedQuantity) {
+                    totalAmount += unitAmount;
+                } else {
+                    totalAmount += unitAmount * movedQty;
+                }
+            }
+        } else {
+            const amount = movedQty * record.unitPrice;
             totalAmount += amount;
         }
     }
 
     if (totalAmount !== 0) {
         transaction.value.sourceAmount = totalAmount;
+    } else if (selectedInventoryRecordIds.value.length > 0) {
+        transaction.value.sourceAmount = 0;
     }
 }
 
 function resetInventoryState() {
     linkInventory.value = false;
     selectedInventoryRecordIds.value = [];
+    movedQuantities.value = {};
+    inventoryItemDefsLoaded.value = false;
+    inventoryRecordsLoaded.value = false;
     transaction.value.inventoryRecordId = undefined;
     transaction.value.inventoryRecordIds = undefined;
     transaction.value.inventoryRecordAmounts = undefined;
@@ -1280,6 +1377,10 @@ watch(() => transaction.value.type, (newType) => {
         recalcInventoryAmount();
     }
 });
+
+watch(movedQuantities, () => {
+    recalcInventoryAmount();
+}, { deep: true });
 
 function init(): void {
     if (!pageTypeAndMode) {
@@ -1398,9 +1499,9 @@ function init(): void {
             }
 
             if (fromTransaction && fromTransaction.inventoryRecordIds && fromTransaction.inventoryRecordIds.length) {
-                loadInventoryDataForExistingTransaction(fromTransaction.inventoryRecordIds);
+                loadInventoryDataForExistingTransaction(fromTransaction.inventoryRecordIds, fromTransaction.inventoryRecordAmounts);
             } else if (fromTransaction && fromTransaction.inventoryRecordId) {
-                loadInventoryDataForExistingTransaction([fromTransaction.inventoryRecordId]);
+                loadInventoryDataForExistingTransaction([fromTransaction.inventoryRecordId], fromTransaction.inventoryRecordAmounts);
             }
         } else if (pageTypeAndMode.type === TransactionEditPageType.Template && query['id'] && responses[4] instanceof TransactionTemplate) {
             const template = responses[4];
@@ -1510,29 +1611,7 @@ function save(afterAction: AfterSaveAction): void {
                 transaction.value.inventoryAction = transaction.value.type === TransactionType.Expense ? 'stock_in' : 'stock_out';
                 const amounts: number[] = [];
                 for (const recordId of selectedInventoryRecordIds.value) {
-                    const record = inventoryRecords.value.find(r => r.id === recordId);
-                    if (!record) { amounts.push(0); continue; }
-                    const def = getSelectedRecordItemDef(recordId);
-                    if (!def) { amounts.push(0); continue; }
-                    const expr = getPricingExpr(def);
-                    if (!expr) { amounts.push(0); continue; }
-                    const fieldValues = record.fieldValues?.values || {};
-                    let substituted = expr;
-                    let allFilled = true;
-                    for (const field of def.fieldSchema?.fields || []) {
-                        const val = fieldValues[field.key];
-                        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
-                            allFilled = false;
-                            break;
-                        }
-                        substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
-                    }
-                    if (allFilled) {
-                        const amount = evaluateExpressionToAmount(substituted);
-                        amounts.push(amount !== undefined ? amount : 0);
-                    } else {
-                        amounts.push(0);
-                    }
+                    amounts.push(movedQuantities.value[recordId] || 0);
                 }
                 transaction.value.inventoryRecordAmounts = amounts;
             }
@@ -1904,5 +1983,19 @@ init();
     height: calc(var(--ebk-transaction-picture-size) - 4px);
     border: 2px dashed #ccc;
     border-radius: 8px;
+}
+
+.inventory-qty-input {
+    width: 64px;
+    text-align: center;
+    border: 1px solid var(--f7-input-border-color, #ccc);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+.margin-left-half {
+    margin-left: 4px;
 }
 </style>

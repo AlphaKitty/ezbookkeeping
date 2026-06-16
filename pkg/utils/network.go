@@ -41,10 +41,15 @@ func GetLocalIPAddresses() ([]net.IP, error) {
 	}
 
 	var localAddrs []net.IP
+	var loopbackAddrs []net.IP
 
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok {
 			if ipnet.IP.IsLoopback() {
+				ip := ipnet.IP.To16()
+				if ip != nil {
+					loopbackAddrs = append(loopbackAddrs, ip)
+				}
 				continue
 			}
 
@@ -58,6 +63,10 @@ func GetLocalIPAddresses() ([]net.IP, error) {
 				localAddrs = append(localAddrs, ip)
 			}
 		}
+	}
+
+	if len(localAddrs) < 1 {
+		return loopbackAddrs, nil
 	}
 
 	return localAddrs, nil

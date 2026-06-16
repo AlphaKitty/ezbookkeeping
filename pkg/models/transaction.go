@@ -418,10 +418,11 @@ type TransactionInfoResponse struct {
 	Pictures             TransactionPictureInfoBasicResponseSlice `json:"pictures,omitempty"`
 	Comment              string                                   `json:"comment"`
 	GeoLocation          *TransactionGeoLocationResponse          `json:"geoLocation,omitempty"`
-	InventoryRecordId    int64                                    `json:"inventoryRecordId,string"`
-	InventoryRecordIds   []string                                 `json:"inventoryRecordIds"`
-	InventoryAction      InventoryAction                          `json:"inventoryAction,omitempty"`
-	Editable             bool                                     `json:"editable"`
+	InventoryRecordId      int64                                    `json:"inventoryRecordId,string"`
+	InventoryRecordIds     []string                                 `json:"inventoryRecordIds"`
+	InventoryRecordAmounts []float64                                `json:"inventoryRecordAmounts"`
+	InventoryAction        InventoryAction                          `json:"inventoryAction,omitempty"`
+	Editable               bool                                     `json:"editable"`
 }
 
 // TransactionCountResponse represents transaction count response
@@ -583,7 +584,7 @@ func (t *Transaction) IsEditable(currentUser *User, clientTimezone *time.Locatio
 }
 
 // ToTransactionInfoResponse returns a view-object according to database model
-func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, inventoryRecordIds []int64, editable bool) *TransactionInfoResponse {
+func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, inventoryRecordIds []int64, inventoryRecordAmounts []float64, editable bool) *TransactionInfoResponse {
 	transactionType, err := t.Type.ToTransactionType()
 
 	if err != nil {
@@ -631,10 +632,11 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, inventoryRecordI
 		TagIds:               utils.Int64ArrayToStringArray(tagIds),
 		Comment:              t.Comment,
 		GeoLocation:          geoLocation,
-		InventoryRecordId:    t.InventoryRecordId,
-		InventoryRecordIds:   utils.Int64ArrayToStringArray(inventoryRecordIds),
-		InventoryAction:      t.InventoryAction,
-		Editable:             editable,
+		InventoryRecordId:      t.InventoryRecordId,
+		InventoryRecordIds:     utils.Int64ArrayToStringArray(inventoryRecordIds),
+		InventoryRecordAmounts: inventoryRecordAmounts,
+		InventoryAction:        t.InventoryAction,
+		Editable:               editable,
 	}
 }
 

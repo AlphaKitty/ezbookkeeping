@@ -25,6 +25,9 @@
                     <template #item.itemDefinitionName="{ item }">
                         <v-chip density="compact" variant="tonal" size="small">{{ item.itemDefinitionName }}</v-chip>
                     </template>
+                    <template #item.quantity="{ item }">
+                        {{ item.quantity || 0 }}{{ item.unit ? ' ' + item.unit : '' }}
+                    </template>
                     <template #item.status="{ item }">
                         <v-chip density="compact" :color="statusColor(item.status)" size="small">{{ statusLabel(item.status) }}</v-chip>
                     </template>
@@ -90,6 +93,18 @@
                     </v-row>
                 </template>
 
+                <v-row class="mt-4">
+                    <v-col cols="4">
+                        <v-text-field v-model.number="form.quantity" :label="tt('Quantity')" type="number" min="0" density="compact" variant="outlined"/>
+                    </v-col>
+                    <v-col cols="4">
+                        <v-text-field v-model="form.unit" :label="tt('Unit')" density="compact" variant="outlined"/>
+                    </v-col>
+                    <v-col cols="4">
+                        <v-text-field v-model.number="form.unitPrice" :label="tt('Unit Price')" type="number" min="0" density="compact" variant="outlined"/>
+                    </v-col>
+                </v-row>
+
                 <p v-if="!currentItemDefinition?.fieldSchema?.fields?.length && form.itemDefinitionId" class="text-caption text-disabled mt-4">{{ tt('This item type has no custom fields defined') }}</p>
 
                 <v-alert v-if="formError" type="error" variant="tonal" density="compact" class="mt-4" closable @click:close="formError = ''">{{ formError }}</v-alert>
@@ -152,6 +167,9 @@ const formError = ref('');
 
 const form = ref({
     itemDefinitionId: '',
+    quantity: 0,
+    unit: '',
+    unitPrice: 0,
 });
 
 const itemDefOptions = computed(() =>
@@ -179,6 +197,7 @@ const displayHeaders = computed(() => {
         }
     }
 
+    h.push({ title: tt('Quantity'), key: 'quantity', align: 'center' as const });
     h.push({ title: tt('Status'), key: 'status', align: 'center' as const });
 
     if (!activeItemDefId.value) {
@@ -260,7 +279,7 @@ async function onItemTypeChange(newId: string) {
 function openCreateDialog() {
     isEditing.value = false;
     editingId.value = '';
-    form.value = { itemDefinitionId: '' };
+    form.value = { itemDefinitionId: '', quantity: 0, unit: '', unitPrice: 0 };
     currentItemDefinition.value = null;
     fieldValues.value = {};
     formError.value = '';
@@ -270,7 +289,12 @@ function openCreateDialog() {
 async function openEditDialog(item: InventoryRecordInfoResponse) {
     isEditing.value = true;
     editingId.value = item.id;
-    form.value = { itemDefinitionId: item.itemDefinitionId };
+    form.value = {
+        itemDefinitionId: item.itemDefinitionId,
+        quantity: item.quantity || 0,
+        unit: item.unit || '',
+        unitPrice: item.unitPrice || 0,
+    };
     formError.value = '';
     await loadItemDefinition(item.itemDefinitionId, item.fieldValues?.values);
     showDialog.value = true;
@@ -306,9 +330,9 @@ async function save() {
                 itemDefinitionId: form.value.itemDefinitionId,
                 warehouseId: '0',
                 fieldValues: fieldValuesPayload,
-                quantity: 0,
-                unit: '',
-                unitPrice: 0,
+                quantity: form.value.quantity || 0,
+                unit: form.value.unit || '',
+                unitPrice: form.value.unitPrice || 0,
                 transporter: '',
                 batchNo: '',
                 status: 'in_stock' as any,
@@ -319,9 +343,9 @@ async function save() {
                 itemDefinitionId: form.value.itemDefinitionId,
                 warehouseId: '0',
                 fieldValues: fieldValuesPayload,
-                quantity: 0,
-                unit: '',
-                unitPrice: 0,
+                quantity: form.value.quantity || 0,
+                unit: form.value.unit || '',
+                unitPrice: form.value.unitPrice || 0,
                 transporter: '',
                 batchNo: '',
                 comment: '',

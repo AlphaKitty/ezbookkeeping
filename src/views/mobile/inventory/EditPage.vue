@@ -59,6 +59,13 @@
             </f7-list>
         </template>
 
+        <f7-block-title>{{ tt('Quantity') }}</f7-block-title>
+        <f7-list strong inset>
+            <f7-list-input type="number" :label="tt('Quantity')" :placeholder="tt('Quantity')" min="0" clear-button v-model:value="form.quantity" />
+            <f7-list-input type="text" :label="tt('Unit')" :placeholder="tt('Unit')" clear-button v-model:value="form.unit" />
+            <f7-list-input type="number" :label="tt('Unit Price')" :placeholder="tt('Unit Price')" min="0" clear-button v-model:value="form.unitPrice" />
+        </f7-list>
+
         <f7-list strong inset v-if="form.itemDefinitionId && !currentItemDefinition?.fieldSchema?.fields?.length">
             <f7-list-item :title="tt('This item type has no custom fields defined')" />
         </f7-list>
@@ -130,6 +137,9 @@ const fieldValues = ref<Record<string, any>>({});
 
 const form = ref({
     itemDefinitionId: '',
+    quantity: 0,
+    unit: '',
+    unitPrice: 0,
 });
 
 const selectedItemDefName = computed(() => {
@@ -208,9 +218,9 @@ async function save() {
                 itemDefinitionId: form.value.itemDefinitionId,
                 warehouseId: '0',
                 fieldValues: fieldValuesPayload,
-                quantity: 0,
-                unit: '',
-                unitPrice: 0,
+                quantity: form.value.quantity || 0,
+                unit: form.value.unit || '',
+                unitPrice: form.value.unitPrice || 0,
                 transporter: '',
                 batchNo: '',
                 status: 'in_stock',
@@ -221,9 +231,9 @@ async function save() {
                 itemDefinitionId: form.value.itemDefinitionId,
                 warehouseId: '0',
                 fieldValues: fieldValuesPayload,
-                quantity: 0,
-                unit: '',
-                unitPrice: 0,
+                quantity: form.value.quantity || 0,
+                unit: form.value.unit || '',
+                unitPrice: form.value.unitPrice || 0,
                 transporter: '',
                 batchNo: '',
                 comment: '',
@@ -249,6 +259,9 @@ function loadInventoryRecord(id: string) {
         editingId.value = record.id;
         isEditing.value = true;
         form.value.itemDefinitionId = record.itemDefinitionId;
+        form.value.quantity = record.quantity || 0;
+        form.value.unit = record.unit || '';
+        form.value.unitPrice = record.unitPrice || 0;
         hideLoading();
 
         const def = itemDefinitions.value.find(d => d.id === record.itemDefinitionId);

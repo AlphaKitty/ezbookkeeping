@@ -101,13 +101,13 @@
                                                   :color="sourceAmountColor"
                                                   :currency="sourceAccountCurrency"
                                                   :show-currency="true"
-                                                  :readonly="mode === TransactionEditPageMode.View || linkInventory"
+                                                  :readonly="mode === TransactionEditPageMode.View || (linkInventory && hasInventoryPricingExpr)"
                                                   :disabled="loading || submitting"
                                                   :persistent-placeholder="true"
                                                   :hide="transaction.hideAmount"
                                                   :label="sourceAmountTitle"
                                                   :placeholder="tt(sourceAmountName)"
-                                                  :enable-formula="mode !== TransactionEditPageMode.View && !linkInventory"
+                                                  :enable-formula="mode !== TransactionEditPageMode.View && !(linkInventory && hasInventoryPricingExpr)"
                                                   v-model="transaction.sourceAmount"/>
                                 </v-col>
                                 <v-col cols="12" :md="6" v-if="transaction.type === TransactionType.Transfer">
@@ -128,10 +128,83 @@
                                     <p v-if="linkInventory && hasInventoryPricingExpr" class="text-caption text-primary mt-1">{{ tt('inventoryAmountAutoCalculated') }}</p>
                                     <template v-if="linkInventory">
                                         <v-autocomplete v-model="selectedInventoryRecordIds" :label="tt('Inventory Record')" :items="inventoryRecordOptions" item-title="name" item-value="id" :custom-filter="filterInventoryRecord" density="compact" variant="outlined" class="mb-3" :disabled="mode === TransactionEditPageMode.View" clearable auto-select-first multiple @update:model-value="onInventoryRecordsChange"/>
-                                        <div v-if="selectedInventoryRecordIds.length" class="d-flex flex-wrap ga-1 mb-3">
-                                            <v-chip v-for="recordId in selectedInventoryRecordIds" :key="recordId" density="comfortable" variant="tonal" color="primary" size="small" closable @click:close="removeSelectedInventoryRecord(recordId)" @click="goToInventoryRecord(recordId)">
-                                                {{ getInventoryRecordName(recordId) }}
-                                            </v-chip>
+                                        <div v-if="selectedInventoryRecordIds.length" class="d-flex flex-column ga-2 mb-3">
+                                            <div v-for="recordId in selectedInventoryRecordIds" :key="recordId" class="d-flex align-center ga-2">
+                                                <v-chip density="comfortable" variant="tonal" color="primary" size="small" closable @click:close="removeSelectedInventoryRecord(recordId)" @click="goToInventoryRecord(recordId)">
+                                                    {{ getInventoryRecordName(recordId) }}
+                                                </v-chip>
+                                                <input type="number" min="0"
+                                                    class="inventory-qty-input"
+                                                    :class="{ 'inventory-qty-exceed': isQuantityExceedsStock(recordId) }"
+                                                    :value="movedQuantities[recordId] ?? 0"
+                                                    @input="onMovedQuantityChange(recordId, $event)"
+                                                    :placeholder="tt('Quantity')"
+                                                    :aria-label="tt('Quantity')"/>
+                                                <span class="text-caption" :class="isQuantityExceedsStock(recordId) ? 'text-error' : 'text-disabled'">{{ getInventoryRecordStockInfo(recordId) }}</span>
+                                                <v-tooltip v-if="isQuantityExceedsStock(recordId)" location="top">
+                                                    <template v-slot:activator="{ props }">
+                                                        <v-icon v-bind="props" :icon="mdiAlertCircleOutline" color="error" size="16"/>
+                                                    </template>
+                                                    <span>{{ tt('Quantity exceeds available stock') }} ({{ getRecordStock(recordId) }})</span>
+                                                </v-tooltip>
+                                                <v-tooltip v-else-if="getRecordMissingFields(recordId).length" location="top">
+                                                    <template v-slot:activator="{ props }">
+                                                        <v-icon v-bind="props" :icon="mdiAlertCircleOutline" color="warning" size="16"/>
+                                                    </template>
+                                                    <span>{{ tt('Missing fields') }}: {{ getRecordMissingFieldsSummary(recordId) }}</span>
+                                                </v-tooltip>
+                                            </div>
+                                        </div>
+                                        <p v-if="hasQuantityExceedRecords" class="text-caption text-error mt-1">
+                                            <v-icon :icon="mdiAlertCircleOutline" size="14" class="me-1"/>
+                                            {{ tt('Some inventory record quantities exceed available stock') }}
+                                        </p>
+                                        <p v-if="hasIncompleteFieldRecords" class="text-caption text-warning mt-1">
+                                            <v-icon :icon="mdiAlertCircleOutline" size="14" class="me-1"/>
+                                            {{ tt('Some inventory record fields are missing') }}
+                                        </p>
+
+                                        <!-- 计算公式面板 -->
+                                        <div v-if="inventoryCalcBreakdown.length" class="inventory-calc-panel mt-2">
+                                            <div class="text-caption font-weight-bold mb-2">{{ tt('Price Calculation') }}</div>
+                                            <div v-for="item in inventoryCalcBreakdown" :key="item.recordId" class="calc-item mb-3">
+                                                <div class="d-flex align-center ga-1 mb-1">
+                                                    <v-chip density="compact" size="x-small" variant="tonal" color="primary">{{ item.itemDefName }}</v-chip>
+                                                    <span class="text-caption text-disabled">× {{ item.movedQty }}</span>
+                                                </div>
+                                                <div class="calc-formula text-caption">
+                                                    <!-- 表达式计算 -->
+                                                    <template v-if="item.calcMethod === 'expression'">
+                                                        <div class="d-flex flex-wrap align-center ga-1">
+                                                            <code class="calc-expr font-weight-bold">{{ item.expr }}</code>
+                                                            <span class="text-disabled">=</span>
+                                                            <code class="calc-expr">{{ item.substituted }}</code>
+                                                        </div>
+                                                        <div v-if="item.fieldSchema.length" class="calc-subs mt-1">
+                                                            <span class="text-disabled">{{ tt('where') }}:</span>
+                                                            <span v-for="f in item.fieldSchema" :key="f.key" class="calc-var ms-2">
+                                                                <code>{{ f.key }}</code>=<span :class="{ 'text-warning': isCalcFieldMissing(item.fieldValues || {}, f.key) }">{{ formatCalcFieldValue(item.fieldValues[f.key]) }}</span>
+                                                            </span>
+                                                        </div>
+                                                    </template>
+                                                    <!-- 无表达式：数量×单价 -->
+                                                    <template v-else>
+                                                        <code class="calc-expr">{{ item.movedQty }}</code>
+                                                        <span class="text-disabled">×</span>
+                                                        <code class="calc-expr">{{ item.unitPrice }}</code>
+                                                        <span v-if="item.unitPrice === 0" class="text-warning text-caption ms-1">(unitPrice = 0)</span>
+                                                    </template>
+                                                </div>
+                                                <div class="calc-result text-caption mt-1">
+                                                    = <span class="font-weight-bold" :class="item.amount === undefined ? 'text-error' : (item.amount === 0 ? 'text-warning' : 'text-primary')">
+                                                        {{ item.amount !== undefined ? formatAmount(item.amount) : '—' }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <v-divider class="my-1"/>
+                                            <div class="calc-total text-body-2 font-weight-bold">
+                                                {{ tt('Total Amount') }}: {{ formatAmount(transaction.sourceAmount) }}
+                                            </div>
                                         </div>
                                     </template>
                                 </v-col>
@@ -423,16 +496,16 @@
             </v-card-text>
             <v-card-text>
                 <div class="w-100 d-flex justify-center flex-wrap mt-sm-1 mt-md-2 gap-4">
-                    <v-tooltip :disabled="!inputIsEmpty" :text="inputEmptyProblemMessage ? tt(inputEmptyProblemMessage) : ''">
+                    <v-tooltip :disabled="!(inputIsEmpty || hasQuantityExceedRecords)" :text="saveDisabledTooltip">
                         <template v-slot:activator="{ props }">
                             <div v-bind="props" class="d-inline-block">
                                 <v-btn-group density="comfortable" v-if="mode === TransactionEditPageMode.Add || mode === TransactionEditPageMode.Edit">
-                                    <v-btn color="primary" :disabled="inputIsEmpty || loading || submitting" @click="save(AfterSaveAction.GoBack)">
+                                    <v-btn color="primary" :disabled="inputIsEmpty || hasQuantityExceedRecords || loading || submitting" @click="save(AfterSaveAction.GoBack)">
                                         {{ tt(saveButtonTitle) }}
                                         <v-progress-circular indeterminate size="22" class="ms-2" v-if="submitting"></v-progress-circular>
                                     </v-btn>
                                     <v-btn color="primary" density="compact"
-                                           :disabled="inputIsEmpty || loading || submitting" :icon="true"
+                                           :disabled="inputIsEmpty || hasQuantityExceedRecords || loading || submitting" :icon="true"
                                            v-if="type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Add">
                                         <v-icon :icon="mdiMenuDown" size="24" />
                                         <v-menu activator="parent">
@@ -607,7 +680,8 @@ import {
     mdiMenuDown,
     mdiImagePlusOutline,
     mdiTrashCanOutline,
-    mdiFullscreen
+    mdiFullscreen,
+    mdiAlertCircleOutline
 } from '@mdi/js';
 
 export interface TransactionEditOptions extends SetTransactionOptions {
@@ -712,6 +786,7 @@ const inventoryItemDefs = ref<ItemDefinitionInfoResponse[]>([]);
 const inventoryItemDefsLoaded = ref(false);
 const inventoryRecords = ref<InventoryRecordInfoResponse[]>([]);
 const selectedInventoryRecordIds = ref<string[]>([]);
+const movedQuantities = ref<Record<string, number>>({});
 const inventoryRecordsLoaded = ref(false);
 
 const showInventoryEditDialog = ref(false);
@@ -786,12 +861,55 @@ function getPricingExpr(def: ItemDefinitionInfoResponse): string {
 }
 
 const hasInventoryPricingExpr = computed(() => {
-    for (const recordId of selectedInventoryRecordIds.value) {
-        const def = getSelectedRecordItemDef(recordId);
-        if (def && getPricingExpr(def)) return true;
-    }
-    return false;
+    return selectedInventoryRecordIds.value.length > 0;
 });
+
+const hasIncompleteFieldRecords = computed(() => {
+    return selectedInventoryRecordIds.value.some(id => getRecordMissingFields(id).length > 0);
+});
+
+function getRecordMissingFieldsSummary(recordId: string): string {
+    const missing = getRecordMissingFields(recordId);
+    if (!missing.length) return '';
+    return missing.join(', ');
+}
+
+function getRecordStock(recordId: string): number {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    return record?.quantity || 0;
+}
+
+function isQuantityExceedsStock(recordId: string): boolean {
+    const movedQty = movedQuantities.value[recordId] || 0;
+    const stock = getRecordStock(recordId);
+    return movedQty > 0 && stock > 0 && movedQty > stock;
+}
+
+const hasQuantityExceedRecords = computed(() => {
+    return selectedInventoryRecordIds.value.some(id => isQuantityExceedsStock(id));
+});
+
+const saveDisabledTooltip = computed(() => {
+    if (hasQuantityExceedRecords.value) return tt('Some inventory record quantities exceed available stock');
+    if (inputIsEmpty.value && inputEmptyProblemMessage.value) return tt(inputEmptyProblemMessage.value);
+    return '';
+});
+
+function formatCalcFieldValue(val: unknown): string {
+    if (val === null || val === undefined || val === '') return '0 ⚠';
+    if (typeof val === 'number' && isNaN(val)) return '0 ⚠';
+    return String(val);
+}
+
+function isCalcFieldMissing(fieldValues: Record<string, unknown>, key: string): boolean {
+    const val = fieldValues[key];
+    return val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val));
+}
+
+function formatAmount(amount: number | undefined | null): string {
+    if (amount === undefined || amount === null) return '—';
+    return (amount / 100).toFixed(2);
+}
 
 let resolveFunc: ((response?: TransactionEditResponse) => void) | null = null;
 let rejectFunc: ((reason?: unknown) => void) | null = null;
@@ -930,9 +1048,9 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             setTransactionModel(transaction, options, true);
             originalTransactionEditable.value = transaction.editable;
             if (transaction.inventoryRecordIds && transaction.inventoryRecordIds.length) {
-                loadInventoryDataForExistingTransaction(transaction.inventoryRecordIds);
+                loadInventoryDataForExistingTransaction(transaction.inventoryRecordIds, transaction.inventoryRecordAmounts);
             } else if (transaction.inventoryRecordId) {
-                loadInventoryDataForExistingTransaction([transaction.inventoryRecordId]);
+                loadInventoryDataForExistingTransaction([transaction.inventoryRecordId], transaction.inventoryRecordAmounts);
             }
         } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[3] && responses[3] instanceof TransactionTemplate) {
             const template: TransactionTemplate = responses[3];
@@ -997,9 +1115,15 @@ function onLinkInventoryToggle(enabled: boolean | null) {
 async function onInventoryRecordsChange() {
     if (!selectedInventoryRecordIds.value.length) {
         transaction.value.sourceAmount = 0;
+        movedQuantities.value = {};
         return;
     }
     await loadInventoryItemDefs();
+    for (const recordId of selectedInventoryRecordIds.value) {
+        if (!(recordId in movedQuantities.value)) {
+            movedQuantities.value[recordId] = 0;
+        }
+    }
     applyCategoryFromSelectedRecords();
     recalcInventoryAmount();
 }
@@ -1017,12 +1141,18 @@ function applyCategoryFromSelectedRecords() {
     }
 }
 
-async function loadInventoryDataForExistingTransaction(inventoryRecordIds: string[]) {
+async function loadInventoryDataForExistingTransaction(inventoryRecordIds: string[], existingAmounts?: number[]) {
     try {
         await loadInventoryItemDefs();
         await loadInventoryRecords();
         selectedInventoryRecordIds.value = inventoryRecordIds;
         linkInventory.value = true;
+        for (let i = 0; i < inventoryRecordIds.length; i++) {
+            const recordId = inventoryRecordIds[i];
+            if (recordId) {
+                movedQuantities.value[recordId] = existingAmounts?.[i] ?? 0;
+            }
+        }
         applyCategoryFromSelectedRecords();
         recalcInventoryAmount();
     } catch (error: any) {
@@ -1030,10 +1160,47 @@ async function loadInventoryDataForExistingTransaction(inventoryRecordIds: strin
     }
 }
 
+function getRecordMissingFields(recordId: string): string[] {
+    const def = getSelectedRecordItemDef(recordId);
+    if (!def?.fieldSchema?.fields?.length) return [];
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return [];
+    const fieldValues = record.fieldValues?.values || {};
+    const missing: string[] = [];
+    for (const field of def.fieldSchema.fields) {
+        const val = fieldValues[field.key];
+        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
+            missing.push(field.key);
+        }
+    }
+    return missing;
+}
+
+interface InventoryCalcBreakdownItem {
+    recordId: string;
+    itemDefName: string;
+    movedQty: number;
+    expr: string;
+    exprSource: 'expense' | 'income' | 'none';
+    unitPrice: number;
+    fieldValues: Record<string, unknown>;
+    fieldSchema: { key: string; unit?: string }[];
+    substituted: string;
+    amount: number | undefined;
+    calcMethod: 'expression' | 'unitPrice';
+    hasMissingFields: boolean;
+}
+
+const inventoryCalcBreakdown = ref<InventoryCalcBreakdownItem[]>([]);
+
 function recalcInventoryAmount() {
-    if (!selectedInventoryRecordIds.value.length) return;
+    if (!selectedInventoryRecordIds.value.length) {
+        inventoryCalcBreakdown.value = [];
+        return;
+    }
 
     let totalAmount = 0;
+    const breakdown: InventoryCalcBreakdownItem[] = [];
 
     for (const recordId of selectedInventoryRecordIds.value) {
         const record = inventoryRecords.value.find(r => r.id === recordId);
@@ -1041,38 +1208,100 @@ function recalcInventoryAmount() {
 
         const def = getSelectedRecordItemDef(recordId);
         if (!def) continue;
+
+        const movedQty = movedQuantities.value[recordId] || 0;
         const expr = getPricingExpr(def);
-        if (!expr) continue;
-
         const fieldValues = record.fieldValues?.values || {};
-        let substituted = expr;
-        let allFieldsFilled = true;
+        const fieldSchema = (def.fieldSchema?.fields || []).map(f => ({ key: f.key, unit: f.unit }));
 
-        for (const field of def.fieldSchema?.fields || []) {
-            const val = fieldValues[field.key];
-            if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
-                allFieldsFilled = false;
-                break;
+        if (expr) {
+            const usesMovedQuantity = expr.includes('movedQuantity');
+            let substituted = expr.replace(/movedQuantity/g, String(movedQty));
+            let hasMissingFields = false;
+
+            for (const field of def.fieldSchema?.fields || []) {
+                const val = fieldValues[field.key];
+                if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
+                    hasMissingFields = true;
+                }
+                const replacement = (val !== null && val !== undefined && val !== '' && !(typeof val === 'number' && isNaN(val)))
+                    ? String(val)
+                    : '0';
+                substituted = substituted.replace(new RegExp(field.key, 'g'), replacement);
             }
-            substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
-        }
 
-        if (!allFieldsFilled) continue;
+            let unitAmount = evaluateExpressionToAmount(substituted);
+            let finalAmount: number | undefined;
+            let displaySubstituted: string;
 
-        const amount = evaluateExpressionToAmount(substituted);
-        if (amount !== undefined) {
+            if (usesMovedQuantity) {
+                // 表达式已包含 movedQuantity，直接使用结果
+                finalAmount = unitAmount;
+                displaySubstituted = substituted;
+            } else {
+                // 表达式不含 movedQuantity，计算单价后乘以数量
+                displaySubstituted = `${movedQty} × (${substituted})`;
+                if (unitAmount !== undefined) {
+                    finalAmount = unitAmount * movedQty;
+                }
+            }
+
+            breakdown.push({
+                recordId,
+                itemDefName: def.name,
+                movedQty,
+                expr,
+                exprSource: transaction.value.type === TransactionType.Expense ? 'expense' : 'income',
+                unitPrice: record.unitPrice,
+                fieldValues,
+                fieldSchema,
+                substituted: displaySubstituted,
+                amount: finalAmount,
+                calcMethod: 'expression',
+                hasMissingFields,
+            });
+
+            if (finalAmount !== undefined) {
+                totalAmount += finalAmount;
+            }
+        } else {
+            const amount = movedQty * record.unitPrice;
+
+            breakdown.push({
+                recordId,
+                itemDefName: def.name,
+                movedQty,
+                expr: '',
+                exprSource: 'none',
+                unitPrice: record.unitPrice,
+                fieldValues,
+                fieldSchema,
+                substituted: `${movedQty} × ${record.unitPrice}`,
+                amount,
+                calcMethod: 'unitPrice',
+                hasMissingFields: false,
+            });
+
             totalAmount += amount;
         }
     }
 
+    inventoryCalcBreakdown.value = breakdown;
+
     if (totalAmount !== 0) {
         transaction.value.sourceAmount = totalAmount;
+    } else if (selectedInventoryRecordIds.value.length > 0) {
+        transaction.value.sourceAmount = 0;
     }
 }
 
 function resetInventoryState() {
     linkInventory.value = false;
     selectedInventoryRecordIds.value = [];
+    movedQuantities.value = {};
+    inventoryCalcBreakdown.value = [];
+    inventoryItemDefsLoaded.value = false;
+    inventoryRecordsLoaded.value = false;
     transaction.value.inventoryRecordId = undefined;
     transaction.value.inventoryRecordIds = undefined;
     transaction.value.inventoryRecordAmounts = undefined;
@@ -1084,6 +1313,11 @@ function save(afterAction: AfterSaveAction): void {
 
     if (problemMessage) {
         snackbar.value?.showMessage(problemMessage);
+        return;
+    }
+
+    if (linkInventory.value && hasQuantityExceedRecords.value) {
+        snackbar.value?.showMessage(tt('Some inventory record quantities exceed available stock'));
         return;
     }
 
@@ -1157,29 +1391,7 @@ function save(afterAction: AfterSaveAction): void {
                 transaction.value.inventoryAction = transaction.value.type === TransactionType.Expense ? 'stock_in' : 'stock_out';
                 const amounts: number[] = [];
                 for (const recordId of selectedInventoryRecordIds.value) {
-                    const record = inventoryRecords.value.find(r => r.id === recordId);
-                    if (!record) { amounts.push(0); continue; }
-                    const def = getSelectedRecordItemDef(recordId);
-                    if (!def) { amounts.push(0); continue; }
-                    const expr = getPricingExpr(def);
-                    if (!expr) { amounts.push(0); continue; }
-                    const fieldValues = record.fieldValues?.values || {};
-                    let substituted = expr;
-                    let allFilled = true;
-                    for (const field of def.fieldSchema?.fields || []) {
-                        const val = fieldValues[field.key];
-                        if (val === null || val === undefined || val === '' || (typeof val === 'number' && isNaN(val))) {
-                            allFilled = false;
-                            break;
-                        }
-                        substituted = substituted.replace(new RegExp(field.key, 'g'), String(val));
-                    }
-                    if (allFilled) {
-                        const amount = evaluateExpressionToAmount(substituted);
-                        amounts.push(amount !== undefined ? amount : 0);
-                    } else {
-                        amounts.push(0);
-                    }
+                    amounts.push(movedQuantities.value[recordId] || 0);
                 }
                 transaction.value.inventoryRecordAmounts = amounts;
             }
@@ -1463,8 +1675,21 @@ function getInventoryRecordName(recordId: string): string {
     return opt?.name || `#${recordId}`;
 }
 
+function getInventoryRecordStockInfo(recordId: string): string {
+    const record = inventoryRecords.value.find(r => r.id === recordId);
+    if (!record) return '';
+    return (record.quantity || 0) + (record.unit ? ' ' + record.unit : '');
+}
+
+function onMovedQuantityChange(recordId: string, event: Event): void {
+    const val = parseFloat((event.target as HTMLInputElement).value);
+    movedQuantities.value[recordId] = isNaN(val) ? 0 : val;
+    recalcInventoryAmount();
+}
+
 function removeSelectedInventoryRecord(recordId: string) {
     selectedInventoryRecordIds.value = selectedInventoryRecordIds.value.filter(id => id !== recordId);
+    delete movedQuantities.value[recordId];
     recalcInventoryAmount();
 }
 
@@ -1571,6 +1796,10 @@ watch(() => transaction.value.type, (newType) => {
     }
 });
 
+watch(movedQuantities, () => {
+    recalcInventoryAmount();
+}, { deep: true });
+
 defineExpose({
     open
 });
@@ -1667,5 +1896,67 @@ defineExpose({
     .transaction-picture-add-icon {
         color: rgba(var(--v-theme-grey-700));
     }
+}
+
+.inventory-qty-input {
+    width: 80px;
+    text-align: center;
+    border: 1px solid rgba(var(--v-theme-on-surface), 0.22);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 14px;
+    background: transparent;
+    color: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.inventory-qty-input:focus {
+    border-color: rgb(var(--v-theme-primary));
+    border-width: 2px;
+    padding: 5px 7px;
+}
+
+.inventory-qty-input.inventory-qty-exceed {
+    border-color: rgb(var(--v-theme-error));
+    color: rgb(var(--v-theme-error));
+}
+
+.inventory-qty-input.inventory-qty-exceed:focus {
+    border-color: rgb(var(--v-theme-error));
+    border-width: 2px;
+    padding: 5px 7px;
+}
+
+.inventory-qty-input::-webkit-inner-spin-button,
+.inventory-qty-input::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
+.inventory-calc-panel {
+    background: rgba(var(--v-theme-surface-variant), 0.3);
+    border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.inventory-calc-panel .calc-expr {
+    background: rgba(var(--v-theme-primary), 0.08);
+    color: rgb(var(--v-theme-primary));
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.inventory-calc-panel .calc-var code {
+    background: rgba(var(--v-theme-on-surface), 0.06);
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 11px;
+}
+
+.inventory-calc-panel .calc-subs {
+    font-size: 11px;
+    line-height: 1.8;
 }
 </style>
