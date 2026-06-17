@@ -5,10 +5,15 @@ import (
 
 	"xorm.io/xorm"
 
+	"encoding/json"
+	"fmt"
+	"strconv"
+
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/datastore"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/utils"
 	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
@@ -82,6 +87,21 @@ func (s *InventoryRecordService) CreateInventoryRecord(c core.Context, uid int64
 		return nil, errs.ErrUserIdInvalid
 	}
 
+	definition, err := ItemDefinitions.GetItemDefinitionById(c, uid, request.ItemDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var fieldValues map[string]any
+	if request.FieldValues != nil {
+		fieldValues = request.FieldValues.Values
+	}
+	computedValues, err := computeRecordFields(definition.FieldSchema, fieldValues)
+	if err != nil {
+		return nil, err
+	}
+	request.FieldValues = &models.ItemFieldValues{Values: computedValues}
+
 	now := time.Now().Unix()
 	status := models.INVENTORY_STATUS_IN_STOCK
 
@@ -102,7 +122,7 @@ func (s *InventoryRecordService) CreateInventoryRecord(c core.Context, uid int64
 		UpdatedUnixTime:   now,
 	}
 
-	_, err := s.UserDataDB(uid).NewSession(c).Insert(record)
+	_, err = s.UserDataDB(uid).NewSession(c).Insert(record)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +135,21 @@ func (s *InventoryRecordService) ModifyInventoryRecord(c core.Context, uid int64
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
+
+	definition, err := ItemDefinitions.GetItemDefinitionById(c, uid, request.ItemDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var modifyFieldValues map[string]any
+	if request.FieldValues != nil {
+		modifyFieldValues = request.FieldValues.Values
+	}
+	computedValues, err := computeRecordFields(definition.FieldSchema, modifyFieldValues)
+	if err != nil {
+		return nil, err
+	}
+	request.FieldValues = &models.ItemFieldValues{Values: computedValues}
 
 	record, err := s.GetInventoryRecordById(c, uid, request.Id)
 	if err != nil {
@@ -180,4 +215,82 @@ func (s *InventoryRecordService) UpdateInventoryQuantity(c core.Context, uid int
 
 	_, err = sess.ID(id).Cols("quantity", "status", "updated_unix_time").Update(update)
 	return err
+}
+
+// computeRecordFields computes computed field values from the schema and user-entered values.
+// It returns the merged values map (manual + computed). Computed field values from the client
+// are always overridden by authoritative server-side computation. Returns an error if any
+// computed field cannot be resolved due to missing dependencies.
+func computeRecordFields(schema *models.ItemFieldSchema, userValues map[string]any) (map[string]any, error) {
+	if schema == nil || len(schema.Fields) == 0 {
+		return userValues, nil
+	}
+
+	// Build FieldExpr list for computed fields
+	var computedFields []utils.FieldExpr
+	for _, f := range schema.Fields {
+		if f.Expr != "" {
+			computedFields = append(computedFields, utils.FieldExpr{Key: f.Key, Expr: f.Expr})
+		}
+	}
+
+	if len(computedFields) == 0 {
+		return userValues, nil
+	}
+
+	// Convert user values from map[string]any to map[string]float64
+	floatValues := make(map[string]float64, len(userValues))
+	for k, v := range userValues {
+		if fv, ok := toFloat64(v); ok {
+			floatValues[k] = fv
+		}
+	}
+
+	// Evaluate computed fields
+	computed, err := utils.EvaluateFields(computedFields, floatValues)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute fields: %w", err)
+	}
+
+	// Reject if any computed field could not be resolved
+	for _, f := range computedFields {
+		if _, ok := computed[f.Key]; !ok {
+			return nil, fmt.Errorf("cannot compute field %q: missing dependencies", f.Key)
+		}
+	}
+
+	// Merge computed values into result (copy user values, then overwrite with computed)
+	result := make(map[string]any, len(userValues)+len(computed))
+	for k, v := range userValues {
+		result[k] = v
+	}
+	for k, v := range computed {
+		result[k] = v
+	}
+
+	return result, nil
+}
+
+// toFloat64 converts a value to float64 if possible.
+func toFloat64(v any) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case json.Number:
+		f, err := val.Float64()
+		return f, err == nil
+	case string:
+		f, err := strconv.ParseFloat(val, 64)
+		return f, err == nil
+	default:
+		return 0, false
+	}
 }

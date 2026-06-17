@@ -2721,6 +2721,7 @@
   "e.g. weight * buy_price": "如 重量 * 進價",
   "Income Pricing Expression": "收入計價表達式",
   "e.g. weight * sell_price": "如 重量 * 售價",
+  "e.g. length * width": "如 長 * 寬",
   "Item Icon": "物品圖標",
   "Select field to insert into expression": "選擇欄位以插入表達式",
   "Add fields below to use in pricing expression": "先添加下方欄位，再點擊欄位鍵名插入表達式",

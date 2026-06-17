@@ -1,12 +1,14 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/datastore"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/utils"
 	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
@@ -27,6 +29,21 @@ var (
 		},
 	}
 )
+
+// validateFieldExpressions validates all expr references in the field schema
+func validateFieldExpressions(schema *models.ItemFieldSchema) error {
+	if schema == nil || len(schema.Fields) == 0 {
+		return nil
+	}
+	fieldExprs := make([]utils.FieldExpr, len(schema.Fields))
+	for i, f := range schema.Fields {
+		fieldExprs[i] = utils.FieldExpr{Key: f.Key, Expr: f.Expr}
+	}
+	if err := utils.ValidateFieldExpressions(fieldExprs); err != nil {
+		return fmt.Errorf("invalid field expression: %w", err)
+	}
+	return nil
+}
 
 // GetAllItemDefinitionsByUid returns all item definition models of user
 func (s *ItemDefinitionService) GetAllItemDefinitionsByUid(c core.Context, uid int64) ([]*models.ItemDefinition, error) {
@@ -68,6 +85,10 @@ func (s *ItemDefinitionService) CreateItemDefinition(c core.Context, uid int64, 
 		return nil, errs.ErrUserIdInvalid
 	}
 
+	if err := validateFieldExpressions(request.FieldSchema); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().Unix()
 	definition := &models.ItemDefinition{
 		ItemDefinitionId:  s.GenerateUuid(uuid.UUID_TYPE_ITEM_DEF),
@@ -95,6 +116,10 @@ func (s *ItemDefinitionService) CreateItemDefinition(c core.Context, uid int64, 
 func (s *ItemDefinitionService) ModifyItemDefinition(c core.Context, uid int64, request *models.ItemDefinitionModifyRequest) (*models.ItemDefinition, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
+	}
+
+	if err := validateFieldExpressions(request.FieldSchema); err != nil {
+		return nil, err
 	}
 
 	definition, err := s.GetItemDefinitionById(c, uid, request.Id)

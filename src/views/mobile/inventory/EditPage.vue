@@ -18,7 +18,7 @@
         <template v-if="currentItemDefinition?.fieldSchema?.fields?.length">
             <f7-block-title>{{ currentItemDefinition.name }}</f7-block-title>
             <f7-list strong inset>
-                <template v-for="field in currentItemDefinition.fieldSchema.fields" :key="field.key">
+                <template v-for="field in manualFields" :key="field.key">
                     <f7-list-input v-if="field.fieldType === 'number'"
                                    type="number"
                                    :label="field.key"
@@ -56,6 +56,13 @@
                                    clear-button
                                    v-model:value="fieldValues[field.key]" />
                 </template>
+
+                <!-- Computed fields (read-only preview) -->
+                <f7-list-item v-for="field in computedFields" :key="'c_' + field.key"
+                              :title="field.key"
+                              :after="computedValues[field.key] !== undefined ? computedValues[field.key] + (field.unit ? ' ' + field.unit : '') : '-'"
+                              :footer="field.expr"
+                              :disabled="true" />
             </f7-list>
         </template>
 
@@ -63,7 +70,7 @@
         <f7-list strong inset>
             <f7-list-input type="number" :label="tt('Quantity')" :placeholder="tt('Quantity')" min="0" clear-button v-model:value="form.quantity" />
             <f7-list-input type="text" :label="tt('Unit')" :placeholder="tt('Unit')" clear-button v-model:value="form.unit" />
-            <f7-list-input type="number" :label="tt('Unit Price')" :placeholder="tt('Unit Price')" min="0" clear-button v-model:value="form.unitPrice" />
+            <!-- <f7-list-input type="number" :label="tt('Unit Price')" :placeholder="tt('Unit Price')" min="0" clear-button v-model:value="form.unitPrice" /> -->
         </f7-list>
 
         <f7-list strong inset v-if="form.itemDefinitionId && !currentItemDefinition?.fieldSchema?.fields?.length">
@@ -105,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import type { Router } from 'framework7/types';
 
 import { useI18n } from '@/locales/helpers.ts';
@@ -113,6 +120,7 @@ import { useI18nUIComponents, showLoading, hideLoading } from '@/lib/ui/mobile.t
 
 import api from '@/lib/services.ts';
 import type { ItemDefinitionInfoResponse, ItemField } from '@/models/item_definition.ts';
+import { evaluateFieldExpressions, type FieldExpr } from '@/lib/expression.ts';
 
 const props = defineProps<{
     f7route: Router.Route;
@@ -134,6 +142,43 @@ const currentEnumField = ref<ItemField | null>(null);
 const itemDefinitions = ref<ItemDefinitionInfoResponse[]>([]);
 const currentItemDefinition = ref<ItemDefinitionInfoResponse | null>(null);
 const fieldValues = ref<Record<string, any>>({});
+const computedValues = ref<Record<string, number>>({});
+
+const computedFields = computed(() => {
+    return (currentItemDefinition.value?.fieldSchema?.fields || [])
+        .filter(f => f.expr && !f.editable);
+});
+
+const manualFields = computed(() => {
+    return (currentItemDefinition.value?.fieldSchema?.fields || [])
+        .filter(f => !f.expr || f.editable);
+});
+
+function recomputeFieldValues() {
+    const fields = computedFields.value;
+    if (fields.length === 0) {
+        computedValues.value = {};
+        return;
+    }
+
+    const fieldExprs: FieldExpr[] = fields.map(f => ({
+        key: f.key,
+        expr: f.expr!,
+    }));
+
+    const floatVals: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fieldValues.value)) {
+        const num = Number(v);
+        if (!isNaN(num)) {
+            floatVals[k] = num;
+        }
+    }
+
+    computedValues.value = evaluateFieldExpressions(fieldExprs, floatVals);
+}
+
+watch(fieldValues, recomputeFieldValues, { deep: true });
+watch(currentItemDefinition, recomputeFieldValues);
 
 const form = ref({
     itemDefinitionId: '',
@@ -193,6 +238,8 @@ async function save() {
 
     const requiredFields = currentItemDefinition.value?.fieldSchema?.fields?.filter(f => f.required) || [];
     for (const field of requiredFields) {
+        // Skip computed fields — they are evaluated server-side
+        if (field.expr && !field.editable) continue;
         const v = fieldValues.value[field.key];
         if (v === null || v === undefined || v === '') {
             showToast(`${field.key}: ${tt('Required')}`);

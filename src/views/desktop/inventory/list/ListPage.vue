@@ -64,7 +64,8 @@
                     <v-divider class="mb-3"/>
                     <div class="text-subtitle-2 mb-3">{{ currentItemDefinition.name }}</div>
                     <v-row>
-                        <v-col v-for="field in currentItemDefinition.fieldSchema.fields" :key="field.key" cols="12" :md="field.fieldType === 'text' ? 12 : 6">
+                        <!-- Manual fields -->
+                        <v-col v-for="field in manualFields" :key="field.key" cols="12" :md="field.fieldType === 'text' ? 12 : 6">
                             <v-text-field v-if="field.fieldType === 'number'"
                                 v-model.number="fieldValues[field.key]"
                                 :label="field.key"
@@ -90,6 +91,17 @@
                                 density="compact" variant="outlined"
                                 :rules="field.required ? [required] : []"/>
                         </v-col>
+                        <!-- Computed fields (read-only preview) -->
+                        <v-col v-for="field in computedFields" :key="'c_' + field.key" cols="12" :md="6">
+                            <v-text-field
+                                :model-value="computedValues[field.key] !== undefined ? computedValues[field.key] : '-'"
+                                :label="field.key"
+                                :suffix="field.unit"
+                                :hint="field.expr"
+                                persistent-hint
+                                density="compact" variant="outlined"
+                                readonly disabled/>
+                        </v-col>
                     </v-row>
                 </template>
 
@@ -100,9 +112,9 @@
                     <v-col cols="4">
                         <v-text-field v-model="form.unit" :label="tt('Unit')" density="compact" variant="outlined"/>
                     </v-col>
-                    <v-col cols="4">
+                    <!-- <v-col cols="4">
                         <v-text-field v-model.number="form.unitPrice" :label="tt('Unit Price')" type="number" min="0" density="compact" variant="outlined"/>
-                    </v-col>
+                    </v-col> -->
                 </v-row>
 
                 <p v-if="!currentItemDefinition?.fieldSchema?.fields?.length && form.itemDefinitionId" class="text-caption text-disabled mt-4">{{ tt('This item type has no custom fields defined') }}</p>
@@ -132,11 +144,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { mdiRefresh, mdiPencilOutline, mdiDeleteOutline } from '@mdi/js';
 
 import api from '@/lib/services.ts';
+import { evaluateFieldExpressions, type FieldExpr } from '@/lib/expression.ts';
 import type { InventoryRecordInfoResponse } from '@/models/inventory_record.ts';
 import type { ItemDefinitionInfoResponse } from '@/models/item_definition.ts';
 
@@ -163,7 +176,44 @@ const activeItemDefId = ref<string>('');
 
 const currentItemDefinition = ref<ItemDefinitionInfoResponse | null>(null);
 const fieldValues = ref<Record<string, any>>({});
+const computedValues = ref<Record<string, number>>({});
 const formError = ref('');
+
+const computedFields = computed(() => {
+    return (currentItemDefinition.value?.fieldSchema?.fields || [])
+        .filter(f => f.expr && !f.editable);
+});
+
+const manualFields = computed(() => {
+    return (currentItemDefinition.value?.fieldSchema?.fields || [])
+        .filter(f => !f.expr || f.editable);
+});
+
+function recomputeFieldValues() {
+    const fields = computedFields.value;
+    if (fields.length === 0) {
+        computedValues.value = {};
+        return;
+    }
+
+    const fieldExprs: FieldExpr[] = fields.map(f => ({
+        key: f.key,
+        expr: f.expr!,
+    }));
+
+    const floatVals: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fieldValues.value)) {
+        const num = Number(v);
+        if (!isNaN(num)) {
+            floatVals[k] = num;
+        }
+    }
+
+    computedValues.value = evaluateFieldExpressions(fieldExprs, floatVals);
+}
+
+watch(fieldValues, recomputeFieldValues, { deep: true });
+watch(currentItemDefinition, recomputeFieldValues);
 
 const form = ref({
     itemDefinitionId: '',
@@ -304,6 +354,8 @@ function validateRequiredFields(): string | null {
     if (!currentItemDefinition.value?.fieldSchema?.fields?.length) return null;
     for (const field of currentItemDefinition.value.fieldSchema.fields) {
         if (!field.required) continue;
+        // Skip computed fields — they are evaluated server-side
+        if (field.expr && !field.editable) continue;
         const v = fieldValues.value[field.key];
         if (v === null || v === undefined || v === '') return `${tt('Required')}: ${field.key}`;
         if (typeof v === 'number' && isNaN(v)) return `${tt('Required')}: ${field.key}`;

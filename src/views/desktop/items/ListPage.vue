@@ -162,6 +162,16 @@
                             <v-checkbox v-model="field.participateInNaming" :label="tt('Participate in Naming')" density="compact" hide-details/>
                         </v-col>
                     </v-row>
+                    <v-row v-if="!field.editable" dense class="mt-1">
+                        <v-col cols="12">
+                            <v-text-field v-model="field.expr" :label="tt('Expression')" :placeholder="tt('e.g. length * width')" density="compact" variant="outlined" :hint="tt('Select field to insert into expression')" persistent-hint/>
+                            <div v-if="validFieldKeys.length > 1" class="mt-1">
+                                <v-chip v-for="key in otherFieldKeys(idx)" :key="'expr_' + idx + '_' + key" density="compact" size="small" class="me-1 mb-1" @click="insertExprFieldKey(idx, key)">
+                                    {{ key }}
+                                </v-chip>
+                            </div>
+                        </v-col>
+                    </v-row>
                     <div v-if="field.fieldType === 'enum'">
                         <div class="d-flex align-center mb-1 mt-2">
                             <span class="text-caption">{{ tt('Options') }}</span>
@@ -234,6 +244,7 @@ interface MutableItemField {
     unit?: string;
     format?: string;
     defaultValue?: string;
+    expr?: string;
     sortOrder: number;
 }
 
@@ -278,7 +289,7 @@ const dateTimeFormatOptions = computed(() => ITEM_DATETIME_FORMAT_OPTIONS.map(op
 })));
 
 const emptyField = (): MutableItemField => ({
-    key: '', label: '', fieldType: 'number', required: true, editable: false, participateInNaming: false, unit: '', sortOrder: 0,
+    key: '', label: '', fieldType: 'number', required: true, editable: false, participateInNaming: false, unit: '', expr: '', sortOrder: 0,
 });
 
 const form = ref({
@@ -365,6 +376,15 @@ function insertExpenseFieldKey(key: string) {
 
 function insertIncomeFieldKey(key: string) {
     form.value.incomePricingExpr += (form.value.incomePricingExpr ? ' ' : '') + key;
+}
+
+function otherFieldKeys(fieldIdx: number): string[] {
+    return validFieldKeys.value.filter((_, i) => i !== fieldIdx);
+}
+
+function insertExprFieldKey(fieldIdx: number, key: string) {
+    const field = form.value.fields[fieldIdx]!;
+    field.expr = (field.expr ? field.expr + ' ' : '') + key;
 }
 
 async function save() {

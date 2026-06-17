@@ -9,6 +9,7 @@ export interface ItemField {
     readonly unit?: string;
     readonly format?: string;
     readonly defaultValue?: string;
+    readonly expr?: string;
     readonly sortOrder: number;
 }
 

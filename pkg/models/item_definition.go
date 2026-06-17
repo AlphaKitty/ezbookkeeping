@@ -24,6 +24,7 @@ type ItemField struct {
 	Unit                 string        `json:"unit,omitempty"`
 	Format               string        `json:"format,omitempty"`
 	DefaultValue         string        `json:"defaultValue,omitempty"`
+	Expr                 string        `json:"expr,omitempty"`
 	SortOrder            int           `json:"sortOrder"`
 }
 
