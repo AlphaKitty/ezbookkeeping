@@ -92,6 +92,22 @@ export interface TransactionTotalAmount {
     incompleteIncome: boolean;
 }
 
+export interface TrackedFieldValue {
+    key: string;
+    value: number;
+    unit: string;
+}
+
+export interface TrackedFieldItemDefSum {
+    itemDefinitionId: string;
+    itemDefinitionName: string;
+    fields: TrackedFieldValue[];
+}
+
+export interface TrackedFieldDailySum {
+    itemDefs: TrackedFieldItemDefSum[];
+}
+
 export interface TransactionMonthList {
     readonly year: number;
     readonly month: number; // 1-based (1 = January, 12 = December)
@@ -100,6 +116,7 @@ export interface TransactionMonthList {
     readonly items: Transaction[];
     readonly totalAmount: TransactionTotalAmount;
     readonly dailyTotalAmounts: Record<string, TransactionTotalAmount>;
+    readonly trackedFieldDailySums?: Record<string, TrackedFieldDailySum>;
 }
 
 export const useTransactionsStore = defineStore('transactions', () => {
@@ -249,6 +266,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 // init the total amount struct of current month when processing the first transaction item of current month
                 calculateMonthTotalAmount(currentMonthList, defaultCurrency, transactionsFilter.value.accountIds, true);
             }
+        }
+
+        // Attach tracked field daily sums from the API response to the last month list
+        if (transactionPageWrapper.trackedFieldDailySums && transactions.value.length > 0) {
+            const lastMonth = transactions.value[transactions.value.length - 1] as TransactionMonthList;
+            (lastMonth as any).trackedFieldDailySums = transactionPageWrapper.trackedFieldDailySums;
         }
 
         if (nextTimeSequenceId) {
@@ -953,7 +976,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
                 const transactionPageWrapper: TransactionPageWrapper = {
                     items: Transaction.ofMulti(data.result.items),
-                    totalCount: data.result.totalCount
+                    totalCount: data.result.totalCount,
+                    trackedFieldDailySums: data.result.trackedFieldDailySums
                 };
 
                 loadTransactionList({

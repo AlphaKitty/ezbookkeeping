@@ -50,3 +50,11 @@ _Avoid_: Calculated field, derived field, formula field
 **Pricing Expression**:
 An arithmetic expression (`ExpensePricingExpr` / `IncomePricingExpr`) on an ItemDefinition that calculates the transaction amount when an inventory record is consumed in an expense or income transaction. Same expression syntax as computed fields.
 _Avoid_: Price formula, amount expression
+
+**Tracked Field**:
+An `ItemField` marked with `trackInCalendar: true`. When a transaction consumes inventory records belonging to an ItemDefinition with tracked fields, the daily sum of `field_value × consumed_quantity` for each tracked field is computed server-side and displayed in the transaction calendar, grouped by ItemDefinition.
+_Avoid_: Calendar field, aggregated field, summary field
+
+**TransactionInventoryIndex**:
+A join table linking a Transaction to multiple InventoryRecords. Each row records the `Amount` (quantity consumed/moved) for one inventory record in one transaction. Used as the authoritative source for multi-record inventory linkage.
+_Avoid_: Inventory link, transaction-inventory relation

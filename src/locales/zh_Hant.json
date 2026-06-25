@@ -2685,6 +2685,7 @@
   "Inventory Record": "庫存記錄",
   "Editable": "可編輯",
   "Participate in Naming": "參與命名",
+  "Track in Calendar": "在日曆中追蹤",
   "inventoryAmountAutoCalculated": "關聯庫存後金額由定價表達式自動計算，不可手動修改",
   "Missing fields": "缺少欄位",
   "Some inventory record fields are missing": "部分庫存記錄存在欄位缺失",

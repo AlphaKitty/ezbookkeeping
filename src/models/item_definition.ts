@@ -10,6 +10,7 @@ export interface ItemField {
     readonly format?: string;
     readonly defaultValue?: string;
     readonly expr?: string;
+    readonly trackInCalendar?: boolean;
     readonly sortOrder: number;
 }
 

@@ -25,6 +25,7 @@ type ItemField struct {
 	Format               string        `json:"format,omitempty"`
 	DefaultValue         string        `json:"defaultValue,omitempty"`
 	Expr                 string        `json:"expr,omitempty"`
+	TrackInCalendar      bool          `json:"trackInCalendar"`
 	SortOrder            int           `json:"sortOrder"`
 }
 

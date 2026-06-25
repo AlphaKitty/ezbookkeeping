@@ -808,6 +808,7 @@ export interface TransactionInfoPageWrapperResponse {
 export interface TransactionInfoPageWrapperResponse2 {
     readonly items: TransactionInfoResponse[];
     readonly totalCount: number;
+    readonly trackedFieldDailySums?: Record<string, any>;
 }
 
 export interface TransactionReconciliationStatementResponseItem extends TransactionInfoResponse {
@@ -842,6 +843,7 @@ export interface TransactionReconciliationStatementResponseWithInfo {
 export interface TransactionPageWrapper {
     readonly items: Transaction[];
     readonly totalCount?: number;
+    readonly trackedFieldDailySums?: Record<string, any>;
 }
 
 export interface TransactionStatisticResponse {

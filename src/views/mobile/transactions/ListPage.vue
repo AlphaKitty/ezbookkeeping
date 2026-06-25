@@ -76,6 +76,7 @@
                                   :min-date="transactionCalendarMinDate"
                                   :max-date="transactionCalendarMaxDate"
                                   :dailyTotalAmounts="currentMonthTransactionData?.dailyTotalAmounts"
+                                  :trackedFieldDailySums="currentMonthTransactionData?.trackedFieldDailySums"
                                   v-model="currentCalendarDate"></transaction-calendar>
         </f7-block>
 

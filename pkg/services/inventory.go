@@ -59,6 +59,21 @@ func (s *InventoryRecordService) GetInventoryRecordsByUid(c core.Context, uid in
 	return records, err
 }
 
+// GetInventoryRecordsByIds returns inventory records by their IDs
+func (s *InventoryRecordService) GetInventoryRecordsByIds(c core.Context, uid int64, ids []int64) ([]*models.InventoryRecord, error) {
+	if uid <= 0 {
+		return nil, errs.ErrUserIdInvalid
+	}
+
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var records []*models.InventoryRecord
+	err := s.UserDataDB(uid).NewSession(c).In("inventory_record_id", ids).Where("uid=? AND deleted=?", uid, false).Find(&records)
+	return records, err
+}
+
 // GetInventoryRecordById returns an inventory record model according to inventory record id
 func (s *InventoryRecordService) GetInventoryRecordById(c core.Context, uid int64, id int64) (*models.InventoryRecord, error) {
 	if uid <= 0 {

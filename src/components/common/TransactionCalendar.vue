@@ -22,6 +22,16 @@
                 <span class="transaction-calendar-alternate-date" v-if="alternateDates && alternateDates[`${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`]">{{ alternateDates[`${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`] }}</span>
                 <span class="transaction-calendar-daily-amount text-income" v-if="dailyTotalAmounts && dailyTotalAmounts[day] && dailyTotalAmounts[day].income">{{ getDisplayMonthTotalAmount(dailyTotalAmounts[day].income, defaultCurrency, '', dailyTotalAmounts[day].incompleteIncome) }}</span>
                 <span class="transaction-calendar-daily-amount text-expense" v-if="dailyTotalAmounts && dailyTotalAmounts[day] && dailyTotalAmounts[day].expense">{{ getDisplayMonthTotalAmount(dailyTotalAmounts[day].expense, defaultCurrency, '', dailyTotalAmounts[day].incompleteExpense) }}</span>
+                <!-- Tracked field sums -->
+                <template v-if="trackedFieldDailySums">
+                    <template v-for="itemDef in (trackedFieldDailySums[String(day)]?.itemDefs || [])" :key="itemDef.itemDefinitionId">
+                        <span class="transaction-calendar-daily-amount text-tracked-field">
+                            <template v-for="field in itemDef.fields" :key="field.key">
+                                {{ field.value }}{{ field.unit ? ' ' + field.unit : '' }}
+                            </template>
+                        </span>
+                    </template>
+                </template>
             </div>
         </template>
     </vue-date-picker>
@@ -32,7 +42,7 @@ import { computed, } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
 
 import { useUserStore } from '@/stores/user.ts';
-import type { TransactionTotalAmount } from '@/stores/transaction.ts';
+import type { TransactionTotalAmount, TrackedFieldDailySum } from '@/stores/transaction.ts';
 
 import type { CalendarAlternateDate, TextualYearMonthDay, WeekDayValue } from '@/core/datetime.ts';
 import { INCOMPLETE_AMOUNT_SUFFIX } from '@/consts/numeral.ts';
@@ -48,6 +58,7 @@ const props = defineProps<{
     maxDate: Date;
     weekDayNameType?: 'long' | 'short';
     dailyTotalAmounts?: Record<string, TransactionTotalAmount>;
+    trackedFieldDailySums?: Record<string, TrackedFieldDailySum>;
     readonly?: boolean;
     calendarClass?: string;
     dayHasTransactionClass?: string;

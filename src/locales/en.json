@@ -2685,6 +2685,7 @@
   "Inventory Record": "Inventory Record",
   "Editable": "Editable",
   "Participate in Naming": "Participate in Naming",
+  "Track in Calendar": "Track in Calendar",
   "inventoryAmountAutoCalculated": "Amount is auto-calculated from pricing expression and cannot be modified manually",
   "Missing fields": "Missing fields",
   "Some inventory record fields are missing": "Some inventory record fields are missing",

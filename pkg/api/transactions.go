@@ -31,12 +31,15 @@ const pageCountForMovingAccountTransactions = 1000
 type TransactionsApi struct {
 	ApiUsingConfig
 	ApiUsingDuplicateChecker
-	transactions          *services.TransactionService
-	transactionCategories *services.TransactionCategoryService
-	transactionTags       *services.TransactionTagService
-	transactionPictures   *services.TransactionPictureService
-	accounts              *services.AccountService
-	users                 *services.UserService
+	transactions           *services.TransactionService
+	transactionCategories  *services.TransactionCategoryService
+	transactionTags        *services.TransactionTagService
+	transactionPictures    *services.TransactionPictureService
+	transactionInventories *services.TransactionInventoryService
+	accounts               *services.AccountService
+	users                  *services.UserService
+	inventoryRecords       *services.InventoryRecordService
+	itemDefinitions        *services.ItemDefinitionService
 }
 
 // Initialize a transaction api singleton instance
@@ -51,12 +54,15 @@ var (
 			},
 			container: duplicatechecker.Container,
 		},
-		transactions:          services.Transactions,
-		transactionCategories: services.TransactionCategories,
-		transactionTags:       services.TransactionTags,
-		transactionPictures:   services.TransactionPictures,
-		accounts:              services.Accounts,
-		users:                 services.Users,
+		transactions:           services.Transactions,
+		transactionCategories:  services.TransactionCategories,
+		transactionTags:        services.TransactionTags,
+		transactionPictures:    services.TransactionPictures,
+		transactionInventories: services.TransactionInventoryIndexes,
+		accounts:               services.Accounts,
+		users:                  services.Users,
+		inventoryRecords:       services.InventoryRecords,
+		itemDefinitions:        services.ItemDefinitions,
 	}
 )
 
@@ -299,12 +305,94 @@ func (a *TransactionsApi) TransactionMonthListHandler(c *core.WebContext) (any, 
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
+	// Compute tracked field daily sums if inventory data is available
+	trackedFieldDailySums := a.computeTrackedFieldDailySums(c, uid, transactions)
+
 	transactionResps := &models.TransactionInfoPageWrapperResponse2{
-		Items:      transactionResult,
-		TotalCount: int64(transactionResult.Len()),
+		Items:                 transactionResult,
+		TotalCount:            int64(transactionResult.Len()),
+		TrackedFieldDailySums: trackedFieldDailySums,
 	}
 
 	return transactionResps, nil
+}
+
+// computeTrackedFieldDailySums computes daily tracked field sums for a set of transactions.
+func (a *TransactionsApi) computeTrackedFieldDailySums(c *core.WebContext, uid int64, transactions []*models.Transaction) map[int]*models.TrackedFieldDailySum {
+	if len(transactions) == 0 {
+		return nil
+	}
+
+	// Collect transaction IDs
+	txIds := make([]int64, len(transactions))
+	for i, tx := range transactions {
+		txIds[i] = tx.TransactionId
+	}
+
+	// Fetch TransactionInventoryIndex for all transactions
+	indexes, err := a.transactionInventories.GetInventoryIndexesByTransactionIds(c, uid, txIds)
+
+	// Build indexes map and collect inventory record IDs
+	indexMap := make(map[int64][]*models.TransactionInventoryIndex)
+	recordIdSet := make(map[int64]bool)
+
+	if err == nil && len(indexes) > 0 {
+		for _, idx := range indexes {
+			indexMap[idx.TransactionId] = append(indexMap[idx.TransactionId], idx)
+			recordIdSet[idx.InventoryRecordId] = true
+		}
+	}
+
+	// Fallback: if no join table rows, use Transaction.InventoryRecordId (legacy field)
+	if len(indexMap) == 0 {
+		for _, tx := range transactions {
+			if tx.InventoryRecordId > 0 {
+				indexMap[tx.TransactionId] = append(indexMap[tx.TransactionId], &models.TransactionInventoryIndex{
+					TransactionId:     tx.TransactionId,
+					InventoryRecordId: tx.InventoryRecordId,
+					Amount:            1, // legacy: Amount is not tracked separately, default to 1
+				})
+				recordIdSet[tx.InventoryRecordId] = true
+			}
+		}
+	}
+
+	if len(indexMap) == 0 {
+		return nil
+	}
+
+	recordIds := make([]int64, 0, len(recordIdSet))
+	for id := range recordIdSet {
+		recordIds = append(recordIds, id)
+	}
+
+	// Fetch InventoryRecords
+	records, err := a.inventoryRecords.GetInventoryRecordsByIds(c, uid, recordIds)
+	if err != nil || len(records) == 0 {
+		return nil
+	}
+
+	recordMap := make(map[int64]*models.InventoryRecord)
+	itemDefIdSet := make(map[int64]bool)
+	for _, r := range records {
+		recordMap[r.InventoryRecordId] = r
+		itemDefIdSet[r.ItemDefinitionId] = true
+	}
+
+	// Fetch all ItemDefinitions
+	allDefs, err := a.itemDefinitions.GetAllItemDefinitionsByUid(c, uid)
+	if err != nil || len(allDefs) == 0 {
+		return nil
+	}
+
+	defMap := make(map[int64]*models.ItemDefinition)
+	for _, d := range allDefs {
+		if itemDefIdSet[d.ItemDefinitionId] {
+			defMap[d.ItemDefinitionId] = d
+		}
+	}
+
+	return services.ComputeTrackedFieldDailySums(transactions, indexMap, recordMap, defMap)
 }
 
 // TransactionListAllHandler returns all transaction list of current user
@@ -2894,6 +2982,36 @@ func (a *TransactionsApi) getTransactionUsedAccounts(c *core.WebContext, uid int
 }
 
 func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, user *models.User, transactions []*models.Transaction, allAccounts map[int64]*models.Account, categoryMap map[int64]*models.TransactionCategory, tagMap map[int64]*models.TransactionTag, allTransactionTagIds map[int64][]int64, pictureInfoMap map[int64][]*models.TransactionPictureInfo, clientTimezone *time.Location, withPictures bool, trimAccount bool, trimCategory bool, trimTag bool) (models.TransactionInfoResponseSlice, error) {
+	uid := user.Uid
+
+	// Build inventory index maps: transactionId → []recordId, transactionId → []amount
+	inventoryRecordIdsMap := make(map[int64][]int64)
+	inventoryRecordAmountsMap := make(map[int64][]float64)
+
+	txIds := make([]int64, len(transactions))
+	for i, tx := range transactions {
+		txIds[i] = tx.TransactionId
+	}
+	if len(txIds) > 0 {
+		indexes, err := a.transactionInventories.GetInventoryIndexesByTransactionIds(c, uid, txIds)
+		if err == nil {
+			for _, idx := range indexes {
+				inventoryRecordIdsMap[idx.TransactionId] = append(inventoryRecordIdsMap[idx.TransactionId], idx.InventoryRecordId)
+				inventoryRecordAmountsMap[idx.TransactionId] = append(inventoryRecordAmountsMap[idx.TransactionId], idx.Amount)
+			}
+		}
+	}
+
+	// Fallback: if no join table rows, use Transaction.InventoryRecordId
+	if len(inventoryRecordIdsMap) == 0 {
+		for _, tx := range transactions {
+			if tx.InventoryRecordId > 0 {
+				inventoryRecordIdsMap[tx.TransactionId] = []int64{tx.InventoryRecordId}
+				inventoryRecordAmountsMap[tx.TransactionId] = []float64{1}
+			}
+		}
+	}
+
 	result := make(models.TransactionInfoResponseSlice, len(transactions))
 
 	for i := 0; i < len(transactions); i++ {
@@ -2905,7 +3023,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 		transactionEditable := transaction.IsEditable(user, clientTimezone, allAccounts[transaction.AccountId], allAccounts[transaction.RelatedAccountId])
 		transactionTagIds := allTransactionTagIds[transaction.TransactionId]
-		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, nil, nil, transactionEditable)
+		result[i] = transaction.ToTransactionInfoResponse(transactionTagIds, inventoryRecordIdsMap[transaction.TransactionId], inventoryRecordAmountsMap[transaction.TransactionId], transactionEditable)
 
 		if !trimAccount {
 			if sourceAccount := allAccounts[transaction.AccountId]; sourceAccount != nil {

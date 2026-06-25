@@ -437,10 +437,30 @@ type TransactionInfoPageWrapperResponse struct {
 	TotalCount         *int64                       `json:"totalCount,omitempty"`
 }
 
+// TrackedFieldValue represents the daily sum of a single tracked field.
+type TrackedFieldValue struct {
+	Key   string  `json:"key"`
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+}
+
+// TrackedFieldItemDefSum groups tracked field sums under one ItemDefinition.
+type TrackedFieldItemDefSum struct {
+	ItemDefinitionId   int64               `json:"itemDefinitionId,string"`
+	ItemDefinitionName string              `json:"itemDefinitionName"`
+	Fields             []TrackedFieldValue `json:"fields"`
+}
+
+// TrackedFieldDailySum holds all tracked field sums for a single day.
+type TrackedFieldDailySum struct {
+	ItemDefs []TrackedFieldItemDefSum `json:"itemDefs"`
+}
+
 // TransactionInfoPageWrapperResponse2 represents a response of transaction which contains items and count
 type TransactionInfoPageWrapperResponse2 struct {
-	Items      TransactionInfoResponseSlice `json:"items"`
-	TotalCount int64                        `json:"totalCount"`
+	Items                 TransactionInfoResponseSlice   `json:"items"`
+	TotalCount            int64                          `json:"totalCount"`
+	TrackedFieldDailySums map[int]*TrackedFieldDailySum  `json:"trackedFieldDailySums,omitempty"`
 }
 
 // TransactionReconciliationStatementResponseItem represents a transaction reconciliation statement response

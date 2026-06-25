@@ -152,14 +152,17 @@
                         </v-col>
                     </v-row>
                     <v-row dense class="mt-1">
-                        <v-col cols="12" sm="4" class="d-flex align-center">
+                        <v-col cols="12" sm="3" class="d-flex align-center">
                             <v-checkbox v-model="field.required" :label="tt('Required')" density="compact" hide-details/>
                         </v-col>
-                        <v-col cols="12" sm="4" class="d-flex align-center">
+                        <v-col cols="12" sm="3" class="d-flex align-center">
                             <v-checkbox v-model="field.editable" :label="tt('Editable')" density="compact" hide-details/>
                         </v-col>
-                        <v-col cols="12" sm="4" class="d-flex align-center">
+                        <v-col cols="12" sm="3" class="d-flex align-center">
                             <v-checkbox v-model="field.participateInNaming" :label="tt('Participate in Naming')" density="compact" hide-details/>
+                        </v-col>
+                        <v-col cols="12" sm="3" class="d-flex align-center">
+                            <v-checkbox v-model="field.trackInCalendar" :label="tt('Track in Calendar')" density="compact" hide-details/>
                         </v-col>
                     </v-row>
                     <v-row v-if="!field.editable" dense class="mt-1">
@@ -240,6 +243,7 @@ interface MutableItemField {
     required: boolean;
     editable: boolean;
     participateInNaming: boolean;
+    trackInCalendar?: boolean;
     options?: string[];
     unit?: string;
     format?: string;
@@ -289,7 +293,7 @@ const dateTimeFormatOptions = computed(() => ITEM_DATETIME_FORMAT_OPTIONS.map(op
 })));
 
 const emptyField = (): MutableItemField => ({
-    key: '', label: '', fieldType: 'number', required: true, editable: false, participateInNaming: false, unit: '', expr: '', sortOrder: 0,
+    key: '', label: '', fieldType: 'number', required: true, editable: false, participateInNaming: false, trackInCalendar: false, unit: '', expr: '', sortOrder: 0,
 });
 
 const form = ref({

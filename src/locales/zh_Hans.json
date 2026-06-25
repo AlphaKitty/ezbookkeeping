@@ -2685,6 +2685,7 @@
   "Inventory Record": "库存记录",
   "Editable": "可编辑",
   "Participate in Naming": "参与命名",
+  "Track in Calendar": "在日历中追踪",
   "inventoryAmountAutoCalculated": "关联库存后金额由定价表达式自动计算，不可手动修改",
   "Missing fields": "缺少字段",
   "Some inventory record fields are missing": "部分库存记录存在字段缺失",
