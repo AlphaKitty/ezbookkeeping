@@ -51,11 +51,56 @@ HEALTH_CHECK_TIMEOUT=30
 HEALTH_CHECK_INTERVAL=2
 GRACEFUL_TIMEOUT=15
 
+# systemd
+SYSTEMD_SERVICE="ezbookkeeping.service"
+SYSTEMD_SERVICE_PATH="/etc/systemd/system/${SYSTEMD_SERVICE}"
+
+# Nginx
+NGINX_CONF_NAME="ezbookkeeping"
+NGINX_SITES_AVAILABLE="/etc/nginx/sites-available/${NGINX_CONF_NAME}"
+NGINX_SITES_ENABLED="/etc/nginx/sites-enabled/${NGINX_CONF_NAME}"
+NGINX_CONF_NGINX="/etc/nginx/conf.d/${NGINX_CONF_NAME}.conf"  # RHEL 系
+
 # 选项
 SKIP_FRONTEND=false
 SKIP_BACKEND=false
 
 cd "$SCRIPT_DIR"
+
+# =============================================================================
+# systemd 检测
+# =============================================================================
+
+# 检查系统是否支持 systemd
+has_systemd() {
+    [[ -d /run/systemd/system ]]
+}
+
+# 检查 systemd 服务文件是否已安装
+is_systemd_installed() {
+    [[ -f "$SYSTEMD_SERVICE_PATH" ]]
+}
+
+# 检查 systemd 服务是否已启用
+is_systemd_enabled() {
+    systemctl is-enabled "$SYSTEMD_SERVICE" &>/dev/null
+}
+
+# 获取 systemd 服务状态
+get_systemd_status() {
+    systemctl is-active "$SYSTEMD_SERVICE" 2>/dev/null || echo "unknown"
+}
+
+# 检测 Nginx 安装方式（sites-available vs conf.d）
+detect_nginx_config_dir() {
+    if [[ -d "/etc/nginx/sites-available" ]]; then
+        echo "sites"
+    elif [[ -d "/etc/nginx/conf.d" ]]; then
+        echo "confd"
+    else
+        echo "none"
+    fi
+}
 
 # =============================================================================
 # 颜色与日志
@@ -594,6 +639,26 @@ do_build() {
 do_stop() {
     log_step "停止服务"
 
+    # 优先使用 systemd
+    if is_systemd_installed; then
+        local status
+        status="$(get_systemd_status)"
+        if [[ "$status" == "active" ]]; then
+            log_info "通过 systemd 停止服务..."
+            if sudo systemctl stop "$SYSTEMD_SERVICE" 2>&1; then
+                log_success "服务已停止 (systemd)"
+                return 0
+            else
+                log_error "systemd 停止失败"
+                return 1
+            fi
+        else
+            log_info "服务未在运行 (systemd 状态: $status)"
+            return 0
+        fi
+    fi
+
+    # 回退：PID 文件 + 进程管理
     local pid
     pid="$(get_pid)"
 
@@ -636,6 +701,32 @@ do_stop() {
 do_start() {
     log_step "启动服务"
 
+    # 优先使用 systemd
+    if is_systemd_installed; then
+        local status
+        status="$(get_systemd_status)"
+        if [[ "$status" == "active" ]]; then
+            log_warn "服务已在运行 (systemd)"
+            log_info "如需重启请执行: ./deploy.sh restart"
+            return 0
+        fi
+        log_info "通过 systemd 启动服务..."
+        if sudo systemctl start "$SYSTEMD_SERVICE" 2>&1; then
+            log_info "等待服务启动..."
+            sleep 2
+            if ! do_health_check; then
+                log_error "服务启动后健康检查失败"
+                return 1
+            fi
+            log_success "服务已启动 (systemd)"
+            return 0
+        else
+            log_error "systemd 启动失败"
+            return 1
+        fi
+    fi
+
+    # 回退：nohup + PID 文件
     # 检查是否已在运行
     if is_running; then
         local pid
@@ -688,6 +779,49 @@ do_restart() {
     print_separator
     log_info "开始重启 $(date '+%Y-%m-%d %H:%M:%S')"
     print_separator
+
+    # 优先使用 systemd
+    if is_systemd_installed; then
+        # 替换文件
+        if [[ -f "$NEW_BINARY" ]]; then
+            if [[ -f "$BINARY_NAME" ]]; then
+                cp "$BINARY_NAME" "$OLD_BINARY"
+                log_info "旧二进制已备份 → $OLD_BINARY"
+            fi
+            mv "$NEW_BINARY" "$BINARY_NAME"
+            log_success "新二进制已就位 → $BINARY_NAME"
+        fi
+
+        if [[ -d "$DIST_DIR" ]] && ! $SKIP_FRONTEND; then
+            if [[ -d "$PUBLIC_DIR" ]]; then
+                rm -rf "${PUBLIC_DIR}.old" 2>/dev/null
+                mv "$PUBLIC_DIR" "${PUBLIC_DIR}.old"
+                log_info "旧前端文件已备份 → ${PUBLIC_DIR}.old"
+            fi
+            mv "$DIST_DIR" "$PUBLIC_DIR"
+            log_success "新前端文件已就位 → $PUBLIC_DIR/"
+        fi
+
+        log_info "通过 systemd 重启服务..."
+        if sudo systemctl restart "$SYSTEMD_SERVICE" 2>&1; then
+            sleep 2
+            if do_health_check; then
+                print_separator
+                log_success "部署完成 ✓"
+                print_separator
+                return 0
+            else
+                log_error "服务重启后健康检查失败，执行回滚..."
+                do_rollback
+                return 1
+            fi
+        else
+            log_error "systemd 重启失败"
+            return 1
+        fi
+    fi
+
+    # 回退：手动停止 + 替换 + 启动
 
     if ! do_stop; then
         log_error "停止旧服务失败，中止部署"
@@ -804,6 +938,14 @@ do_rollback() {
 # =============================================================================
 
 do_status() {
+    # 优先使用 systemd
+    if is_systemd_installed; then
+        echo "管理方式: systemd"
+        echo ""
+        systemctl status "$SYSTEMD_SERVICE" 2>/dev/null || true
+        return 0
+    fi
+
     local pid
     pid="$(get_pid)"
 
@@ -848,6 +990,14 @@ do_status() {
 }
 
 do_logs() {
+    # 优先使用 systemd journal
+    if is_systemd_installed; then
+        echo "systemd 日志 ($SYSTEMD_SERVICE)，按 Ctrl+C 退出..."
+        echo ""
+        journalctl -u "$SYSTEMD_SERVICE" -f
+        return 0
+    fi
+
     local log_file="log/${APP_NAME}.log"
 
     if [[ ! -f "$log_file" ]]; then
@@ -862,8 +1012,310 @@ do_logs() {
 }
 
 # =============================================================================
-# 主流程：完整部署
+# systemd 服务安装
 # =============================================================================
+
+do_systemd_install() {
+    log_step "安装 systemd 服务"
+
+    if ! has_systemd; then
+        log_error "当前系统不支持 systemd"
+        return 1
+    fi
+
+    if is_systemd_installed; then
+        log_info "systemd 服务文件已存在: $SYSTEMD_SERVICE_PATH"
+        # 显示当前配置
+        echo ""
+        cat "$SYSTEMD_SERVICE_PATH"
+        echo ""
+        log_info "如需重新生成，请先删除: sudo rm $SYSTEMD_SERVICE_PATH"
+        return 0
+    fi
+
+    # 检测运行用户
+    local run_user="${SUDO_USER:-$USER}"
+    if [[ "$run_user" == "root" ]]; then
+        log_warn "以 root 运行，建议创建专用用户。将使用当前配置继续。"
+    fi
+
+    # 确定配置文件路径
+    local config_path="${SCRIPT_DIR}/${USER_CONFIG}"
+    if [[ ! -f "$config_path" ]]; then
+        config_path="${SCRIPT_DIR}/${REPO_CONFIG}"
+    fi
+
+    log_info "运行用户: $run_user"
+    log_info "工作目录: $SCRIPT_DIR"
+    log_info "配置文件: $config_path"
+
+    # 生成服务文件
+    local tmp_service="/tmp/${SYSTEMD_SERVICE}"
+    cat > "$tmp_service" << SERVICEOF
+[Unit]
+Description=ezbookkeeping - Enterprise Bookkeeping
+Documentation=https://github.com/mayswind/ezbookkeeping
+After=network.target
+
+[Service]
+Type=simple
+User=$run_user
+WorkingDirectory=$SCRIPT_DIR
+ExecStart=$SCRIPT_DIR/$BINARY_NAME server run --conf-path $config_path
+ExecStop=/bin/kill -SIGTERM \$MAINPID
+Restart=always
+RestartSec=5
+
+# 安全加固
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=$SCRIPT_DIR/data $SCRIPT_DIR/log $SCRIPT_DIR/storage
+ReadOnlyPaths=$SCRIPT_DIR/conf $SCRIPT_DIR/public $SCRIPT_DIR/templates
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=$APP_NAME
+
+[Install]
+WantedBy=multi-user.target
+SERVICEOF
+
+    log_info "生成的服务文件内容:"
+    echo ""
+    echo "---"
+    cat "$tmp_service"
+    echo "---"
+    echo ""
+
+    # 安装需要 sudo
+    log_info "需要 root 权限安装服务文件..."
+    if ! sudo cp "$tmp_service" "$SYSTEMD_SERVICE_PATH"; then
+        log_error "无法写入 $SYSTEMD_SERVICE_PATH"
+        rm -f "$tmp_service"
+        return 1
+    fi
+    rm -f "$tmp_service"
+
+    if ! sudo systemctl daemon-reload; then
+        log_error "systemctl daemon-reload 失败"
+        return 1
+    fi
+
+    log_success "systemd 服务已安装: $SYSTEMD_SERVICE_PATH"
+
+    echo ""
+    print_separator
+    log_info "后续操作:"
+    echo ""
+    echo "  # 启动服务"
+    echo "  sudo systemctl start $SYSTEMD_SERVICE"
+    echo ""
+    echo "  # 开机自启"
+    echo "  sudo systemctl enable $SYSTEMD_SERVICE"
+    echo ""
+    echo "  # 查看状态"
+    echo "  systemctl status $SYSTEMD_SERVICE"
+    echo ""
+    echo "  # 查看日志"
+    echo "  journalctl -u $SYSTEMD_SERVICE -f"
+    echo ""
+    echo "  # 之后每次部署会自动调用 systemctl restart"
+    print_separator
+
+    return 0
+}
+
+# =============================================================================
+# Nginx 反向代理配置
+# =============================================================================
+
+do_nginx_setup() {
+    log_step "配置 Nginx 反向代理"
+
+    if ! command -v nginx &>/dev/null; then
+        log_error "未找到 nginx，请先安装: sudo apt install nginx"
+        return 1
+    fi
+
+    local nginx_dir
+    nginx_dir="$(detect_nginx_config_dir)"
+    if [[ "$nginx_dir" == "none" ]]; then
+        log_error "未找到 Nginx 配置目录 (sites-available 或 conf.d)"
+        return 1
+    fi
+
+    local config_file enable_cmd
+    if [[ "$nginx_dir" == "sites" ]]; then
+        config_file="$NGINX_SITES_AVAILABLE"
+        enable_cmd="sudo ln -sf $NGINX_SITES_AVAILABLE $NGINX_SITES_ENABLED"
+    else
+        config_file="$NGINX_CONF_NGINX"
+        enable_cmd=""
+    fi
+
+    local domain port
+    port="$(get_server_port)"
+
+    echo ""
+    log_info "请输入以下信息（直接回车使用默认值）:"
+    echo ""
+
+    read -r -p "  域名 (如 ez.example.com): " domain
+    if [[ -z "$domain" ]]; then
+        log_error "域名不能为空"
+        return 1
+    fi
+
+    local use_https
+    read -r -p "  是否启用 HTTPS？[Y/n]: " use_https
+    use_https="${use_https:-y}"
+    if [[ "$use_https" =~ ^[Yy] ]]; then
+        use_https="yes"
+    else
+        use_https="no"
+    fi
+
+    local cert_path="" key_path=""
+    if [[ "$use_https" == "yes" ]]; then
+        read -r -p "  SSL 证书路径 (fullchain.pem): " cert_path
+        read -r -p "  SSL 私钥路径 (privkey.pem): " key_path
+        if [[ -z "$cert_path" ]] || [[ -z "$key_path" ]]; then
+            log_error "证书路径和私钥路径不能为空"
+            return 1
+        fi
+    fi
+
+    local tmp_conf="/tmp/nginx-${NGINX_CONF_NAME}.conf"
+    local now_str
+    now_str="$(date '+%Y-%m-%d %H:%M:%S')"
+
+    # 生成配置头部
+    cat > "$tmp_conf" << NGINXEOF
+# ezbookkeeping Nginx 配置
+# 由 deploy.sh 自动生成于 $now_str
+# 域名: $domain
+
+NGINXEOF
+
+    # 通用反向代理 location 块
+    local proxy_block
+    proxy_block="    location / {
+        proxy_pass http://127.0.0.1:$port;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+
+        client_max_body_size 20m;
+    }"
+
+    if [[ "$use_https" == "yes" ]]; then
+        cat >> "$tmp_conf" << NGINXEOF
+# HTTP → HTTPS 重定向
+server {
+    listen 80;
+    server_name $domain;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $domain;
+
+    ssl_certificate     $cert_path;
+    ssl_certificate_key $key_path;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+$proxy_block
+}
+NGINXEOF
+    else
+        cat >> "$tmp_conf" << NGINXEOF
+server {
+    listen 80;
+    server_name $domain;
+
+$proxy_block
+}
+NGINXEOF
+    fi
+
+    log_info "生成的 Nginx 配置:"
+    echo ""
+    echo "---"
+    cat "$tmp_conf"
+    echo "---"
+    echo ""
+
+    read -r -p "  是否安装此配置？[Y/n]: " confirm
+    confirm="${confirm:-y}"
+    if [[ ! "$confirm" =~ ^[Yy] ]]; then
+        log_info "已取消"
+        rm -f "$tmp_conf"
+        return 0
+    fi
+
+    log_info "需要 root 权限安装 Nginx 配置..."
+    if ! sudo cp "$tmp_conf" "$config_file"; then
+        log_error "无法写入 $config_file"
+        rm -f "$tmp_conf"
+        return 1
+    fi
+    rm -f "$tmp_conf"
+
+    if [[ -n "$enable_cmd" ]]; then
+        eval "$enable_cmd" || log_warn "创建软链接失败"
+    fi
+
+    if ! sudo nginx -t 2>&1; then
+        log_error "Nginx 配置测试失败，请检查"
+        return 1
+    fi
+
+    if ! sudo nginx -s reload 2>&1; then
+        log_error "Nginx 重载失败"
+        return 1
+    fi
+
+    log_success "Nginx 配置已安装并重载"
+    echo ""
+    if [[ "$use_https" == "yes" ]]; then
+        log_info "访问地址: https://$domain"
+        echo ""
+        log_info "=== 免费 Let's Encrypt 证书（如尚未配置）==="
+        echo ""
+        echo "  sudo apt install certbot python3-certbot-nginx"
+        echo "  sudo certbot --nginx -d $domain"
+        echo ""
+        echo "  certbot 会自动修改 Nginx 配置并设置自动续期"
+    else
+        log_info "访问地址: http://$domain"
+    fi
+
+    return 0
+}
 
 do_deploy() {
     # 轮换部署日志
@@ -901,6 +1353,33 @@ do_deploy() {
     # 5. 重启服务
     do_restart || return 1
 
+    # 6. 部署后建议
+    echo ""
+    local suggestions=()
+    if has_systemd && ! is_systemd_installed; then
+        suggestions+=("systemd")
+    fi
+    if command -v nginx &>/dev/null && [[ "$(detect_nginx_config_dir)" != "none" ]]; then
+        suggestions+=("nginx")
+    fi
+
+    if [[ ${#suggestions[@]} -gt 0 ]]; then
+        print_separator
+        log_info "建议执行的后续操作:"
+        echo ""
+        for s in "${suggestions[@]}"; do
+            case "$s" in
+                systemd)
+                    echo "  ./deploy.sh systemd              # 安装 systemd 服务（崩溃自动重启、开机自启）"
+                    ;;
+                nginx)
+                    echo "  ./deploy.sh nginx                # 配置 Nginx 反向代理（HTTPS、静态文件加速）"
+                    ;;
+            esac
+        done
+        print_separator
+    fi
+
     return 0
 }
 
@@ -922,10 +1401,12 @@ ezbookkeeping 部署脚本
   ./deploy.sh build         仅构建（不重启）
   ./deploy.sh check         仅环境检查
   ./deploy.sh rollback      回滚到上一个版本
+  ./deploy.sh systemd       安装 systemd 服务（崩溃自动重启、开机自启）
+  ./deploy.sh nginx         配置 Nginx 反向代理（HTTPS、静态文件加速）
 
 选项:
-  --skip-frontend           跳过前端构建（仅重启时有效）
-  --skip-backend            跳过后端构建（仅重启时有效）
+  --skip-frontend           跳过前端构建
+  --skip-backend            跳过后端构建
   -h, --help                显示此帮助
 
 示例:
@@ -933,20 +1414,24 @@ ezbookkeeping 部署脚本
   ./deploy.sh --skip-frontend          # 只更新后端
   ./deploy.sh restart                  # 仅重启（不拉代码、不构建）
   ./deploy.sh status                   # 查看运行状态
+  ./deploy.sh systemd                  # 生成 systemd 服务文件
 
-首次部署:
+首次部署（推荐流程）:
   1. 上传代码到服务器
-  2. ./deploy.sh check     # 检查环境
-  3. ./deploy.sh           # 首次部署（会自动创建配置并生成 secret_key）
-  4. 检查提示中的配置文件，确认无误
-  5. ./deploy.sh           # 再次执行完成部署
+  2. ./deploy.sh check                 # 检查环境
+  3. ./deploy.sh                       # 首次部署（自动创建配置）
+  4. 检查 conf/ezbookkeeping.user.ini，确认无误
+  5. ./deploy.sh                       # 再次执行完成部署
+  6. ./deploy.sh systemd               # 安装 systemd 服务
+     sudo systemctl enable --now ezbookkeeping
+  7. ./deploy.sh nginx                 # (可选) 配置 Nginx 反向代理
 
 日常更新:
-  ./deploy.sh              # 自动 git pull → 构建 → 重启
+  ./deploy.sh              # git pull → 构建 → systemctl restart
 
 配置文件:
   仓库模板:    conf/ezbookkeeping.ini        (git 跟踪，随版本更新)
-  用户配置:    conf/ezbookkeeping.user.ini   (首次自动创建，永不覆盖，请勿提交到 git)
+  用户配置:    conf/ezbookkeeping.user.ini   (首次自动创建，永不覆盖)
 EOF
 }
 
@@ -958,7 +1443,7 @@ EOF
 COMMAND=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        start|stop|restart|status|logs|build|check|rollback)
+        start|stop|restart|status|logs|build|check|rollback|systemd|nginx)
             COMMAND="$1"
             ;;
         --skip-frontend)
@@ -1012,6 +1497,12 @@ case "$COMMAND" in
         ;;
     rollback)
         do_rollback
+        ;;
+    systemd)
+        do_systemd_install
+        ;;
+    nginx)
+        do_nginx_setup
         ;;
     *)
         # 默认：完整部署
